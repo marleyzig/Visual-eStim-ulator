@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Signal Designer Documentation</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        :root {
+            --bg: #0b0b0b;
+            --panel: #1b1b1b;
+            --muted: #777;
+            --purple: #b266ff;
+            --purple-light: #d9b3ff;
+            --gold: #ffca28;
+            --cream: #fdf5e6;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: var(--bg);
+            color: var(--cream);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 { color: var(--purple); text-align: center; border-bottom: 2px solid var(--purple-light); padding-bottom: 10px; }
+        h2 { color: var(--gold); margin-top: 40px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        h3 { color: var(--purple-light); margin-top: 30px; }
+        
+        .doc-item {
+            background: var(--panel);
+            border: 1px solid #333;
+            border-left: 4px solid var(--purple);
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            transition: background 0.3s;
+        }
+        
+        /* Highlight target when linked directly via URL hash */
+        .doc-item:target {
+            background: #2a1a3a;
+            border-left-color: var(--gold);
+        }
+
+        .doc-item h4 {
+            margin: 0 0 10px 0;
+            color: var(--gold);
+            font-size: 1.1em;
+        }
+
+        .doc-item p { margin: 0 0 8px 0; }
+        .doc-item p:last-child { margin: 0; }
+        .doc-item strong { color: var(--cream); }
+        .feature-tag { font-size: 0.8em; background: #333; padding: 2px 6px; border-radius: 4px; color: var(--purple-light); margin-left: 8px; vertical-align: middle; }
+
+        .nav-links { text-align: center; margin-bottom: 30px; }
+        .nav-links a { color: var(--gold); text-decoration: none; margin: 0 10px; font-weight: bold; }
+        .nav-links a:hover { color: var(--cream); }
+    </style>
+</head>
+<body>
+
+    <h1>Multi-Deck Signal Designer: Documentation</h1>
+    
+    <div class="nav-links">
+        <a href="#global-controls">Global Controls</a> | 
+        <a href="#4phase-deck">4-Phase Deck</a> | 
+        <a href="#3phase-deck">3-Phase Deck</a>
+    </div>
+
+    <p style="text-align: center; color: var(--muted); margin-bottom: 40px;">
+        This document explains how each control manipulates the math and motion of the signal outputs in simple, everyday terms.
+    </p>
+
+    <!-- ========================================== -->
+    <!-- GLOBAL CONTROLS                            -->
+    <!-- ========================================== -->
+    <h2 id="global-controls">Global Controls</h2>
+
+    <div id="doc-global-record" class="doc-item">
+        <h4>▶ Start Master Recording</h4>
+        <p><strong>What it does:</strong> Begins listening to all active decks and logs their movements into a master file.</p>
+        <p><strong>Output Effect:</strong> Doesn't change the physical feeling. When you click stop, it packages the timeline of everything you just did into a `.json` file that you can load into the Playback Engine later to perfectly recreate the session.</p>
+    </div>
+
+    <div id="doc-global-videosync" class="doc-item">
+        <h4>Advanced Video Beat Sync</h4>
+        <p><strong>What it does:</strong> Analyzes a loaded video's audio track (or visual flashes) to automatically detect the "BPM" or tempo.</p>
+        <p><strong>Output Effect:</strong> Allows you to map the speed of your decks directly to the video. <em>Energy</em> mode listens for loud kicks/bass. <em>Transient</em> mode listens for sharp clicks/claps. <em>Visual</em> mode tracks brightness changes inside a little draggable target box.</p>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 4-PHASE DECK                               -->
+    <!-- ========================================== -->
+    <h2 id="4phase-deck">4-Phase Deck Controls</h2>
+    <p style="color: var(--muted); font-size: 0.9em; margin-bottom: 20px;">The 4-Phase deck calculates independent intensities for 4 separate outputs (E1, E2, E3, E4) based on geometric coordinate mapping.</p>
+
+    <div id="doc-4p-pattern" class="doc-item">
+        <h4>Pattern / Macro Selector</h4>
+        <p><strong>What it does:</strong> Chooses the "path" the power dot travels across the grid.</p>
+        <p><strong>Output Effect:</strong> <em>Sequences</em> (like Round Robin or Pendulum) are moving paths that create a continuous swirling or sweeping sensation. <em>Macros</em> lock the signal into static, hard-coded combinations (like toggling just the left and right sides) without needing to move the dot.</p>
+    </div>
+
+    <div id="doc-4p-speed" class="doc-item">
+        <h4>Speed (Hz) <span class="feature-tag">Syncable</span></h4>
+        <p><strong>What it does:</strong> Controls how fast the chosen Pattern completes one full cycle.</p>
+        <p><strong>Output Effect:</strong> 1.00 Hz means the pattern loops exactly once per second. Check the "Sync" box to let the Video Beat Sync panel automatically push detected tempo changes directly to this slider.</p>
+    </div>
+
+    <div id="doc-4p-radius" class="doc-item">
+        <h4>Orbit Radius (%) <span class="feature-tag">X/Y Split Available</span></h4>
+        <p><strong>What it does:</strong> Controls how far from the center the power dot reaches during its motion.</p>
+        <p><strong>Output Effect:</strong> At 100%, the dot reaches the very edges of the grid (maximum intensity swapping). At 20%, it stays tightly bundled near the center (a much softer, more diffuse sensation). Unchecking "Sync Axes" lets you make the circle into a squished oval (e.g., wide horizontal reach, shallow vertical reach).</p>
+    </div>
+
+    <div id="doc-4p-sweep" class="doc-item">
+        <h4>Sweep Arc & End Pause</h4>
+        <p><strong>What it does:</strong> Specifically modifies the "Pendulum" patterns.</p>
+        <p><strong>Output Effect:</strong> <em>Sweep Arc</em> limits how far the pendulum swings (e.g., 180° is a half-circle windshield wiper). <em>End Pause</em> tells the dot to briefly stop and hold its position at the edge before swinging back (measured in milliseconds).</p>
+    </div>
+
+    <div id="doc-4p-rotation" class="doc-item">
+        <h4>Rotation Angle (Deg)</h4>
+        <p><strong>What it does:</strong> Tilts the entire mathematical grid under the power dot.</p>
+        <p><strong>Output Effect:</strong> If your hardware outputs feel physically "crooked" or misaligned, turning this slider will rotate the feeling (up to 180 degrees left or right) until it aligns properly with reality.</p>
+    </div>
+
+    <div id="doc-4p-engine" class="doc-item">
+        <h4>Engine Mode (Geometric vs Intensity)</h4>
+        <p><strong>What it does:</strong> Changes how the math translates the dot's X/Y position into output power.</p>
+        <p><strong>Output Effect:</strong> <em>Geometric</em> is raw and accurate; if the dot is exactly between A and B, A and B are both getting 50% power. <em>Intensity Modulated</em> applies a smoothing curve so the feeling fades more softly as it moves between points.</p>
+    </div>
+
+    <div id="doc-4p-lfo" class="doc-item">
+        <h4>LFO (Advanced Auto-Motion)</h4>
+        <p><strong>What it does:</strong> An invisible "hand" that slowly pushes the center anchor point of your pattern around the grid.</p>
+        <p><strong>Output Effect:</strong> If you are running a tight, fast circle in the middle of the grid, applying a slow Horizontal LFO will cause that entire spinning circle to slowly drift from the left side of the grid to the right side, and back again.</p>
+    </div>
+
+    <div id="doc-4p-restim" class="doc-item">
+        <h4>ReStim Modifiers (C0, P0, etc.)</h4>
+        <p><strong>What it does:</strong> Advanced variables that modify the internal electrical shape of the signal.</p>
+        <p><strong>Output Effect:</strong> 
+            <br>• <strong>C0 (Carrier Freq):</strong> The fundamental "pitch" of the buzz (higher is sharper, lower is a deep hum).
+            <br>• <strong>P0/P1 (Pulse Freq/Width):</strong> Changes the signal from a continuous hum into a "tapping" or "thumping" feeling.
+        </p>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 3-PHASE DECK                               -->
+    <!-- ========================================== -->
+    <h2 id="3phase-deck">3-Phase Deck Controls</h2>
+    <p style="color: var(--muted); font-size: 0.9em; margin-bottom: 20px;">The 3-Phase deck uses an entirely different architecture, outputting Cartesian coordinates (L0 for X-axis, L1 for Y-axis) and a Carrier Frequency modifier (C0) to drive a three-point mixing engine.</p>
+
+    <div id="doc-3p-play" class="doc-item">
+        <h4>▶ Start Deck</h4>
+        <p><strong>What it does:</strong> Activates the math engines for both the Left and Right channels simultaneously.</p>
+        <p><strong>Output Effect:</strong> You will immediately see the power dot start generating a trace path on the canvas, and TCode will start streaming to your hardware.</p>
+    </div>
+
+    <div id="doc-3p-radius" class="doc-item">
+        <h4>Orbit Radius (%)</h4>
+        <p><strong>What it does:</strong> Adjusts the global size of the movement.</p>
+        <p><strong>Output Effect:</strong> Scales both the Left and Right channel outputs down. Lower percentages keep the motion closer to the center (neutral) point of the grid.</p>
+    </div>
+
+    <div id="doc-3p-am" class="doc-item">
+        <h4>Orbit Speed / AM Freq (Hz) <span class="feature-tag">Linked Channels</span></h4>
+        <p><strong>What it does:</strong> AM (Amplitude Modulation) is what actually moves the dot. The Left Channel controls Up/Down motion, and the Right Channel controls Left/Right motion.</p>
+        <p><strong>Output Effect:</strong> 
+            <br>• <strong>Linked:</strong> By designating a "Base" channel and setting a "Multiplier", the math forces the dot to draw perfect geometric shapes (like circles, infinity signs, or figure-eights).
+            <br>• <strong>Unlinked:</strong> You can set the speeds entirely independently, resulting in chaotic, drifting, bouncing-DVD-logo style movement.
+        </p>
+    </div>
+
+    <div id="doc-3p-fm" class="doc-item">
+        <h4>Channel Frequencies & FM Depth</h4>
+        <p><strong>What it does:</strong> Controls the "pitch" (Carrier Frequency, C0) of the signal when the dot is in different areas.</p>
+        <p><strong>Output Effect:</strong> You can make it so the feeling is a deep hum when the dot is on the left side of the screen, and a sharp buzz when the dot is on the right side. <em>FM Depth</em> and <em>FM Freq</em> allow you to make the pitch warble up and down like a siren while it moves.</p>
+    </div>
+
+    <div id="doc-3p-globalpulse" class="doc-item">
+        <h4>Global Pulse (P0/P1)</h4>
+        <p><strong>What it does:</strong> Overrides the continuous feeling with a rhythmic tapping.</p>
+        <p><strong>Output Effect:</strong> <em>Pulse Freq</em> determines how many taps happen per second. <em>Pulse Width</em> determines how long each individual tap lasts (a very low width feels like a sharp needle prick, a higher width feels like a solid push).</p>
+    </div>
+
+    <div id="doc-3p-tremolo" class="doc-item">
+        <h4>V0 Dual Tremolo</h4>
+        <p><strong>What it does:</strong> Modulates the Master Volume (V0) in rhythmic waves.</p>
+        <p><strong>Output Effect:</strong> Creates a "swelling" and "fading" feeling on top of whatever the dot is currently doing. You can run two separate tremolos (Alpha and Beta) at different speeds at the same time to create complex, unpredictable volume swells.</p>
+    </div>
+
+    <div id="doc-3p-spatial" class="doc-item">
+        <h4>Spatial Auto-Motion</h4>
+        <p><strong>What it does:</strong> An advanced feature that forces the center point of the grid to drift around automatically.</p>
+        <p><strong>Output Effect:</strong> Similar to the 4-Phase LFO. If you change "Power Dot Motion" to <em>Pendulum</em>, you can combine a swinging pendulum motion that is also slowly orbiting around the outside of the grid.</p>
+    </div>
+
+</body>
+</html>

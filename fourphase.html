@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Dual 4-Phase Spatial Sequencer</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body { font-family: sans-serif; background: #000; color: #eee; margin: 0; padding: 20px; }
+        
+        /* Side-by-side layout for the dual decks */
+        .dashboard-container {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            align-items: flex-start;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 20px;
+        }
+
+        .deck {
+            display: flex;
+            gap: 30px;
+            padding: 20px;
+            background: #111;
+            border: 2px solid #333;
+            border-radius: 12px;
+        }
+
+        /* Custom, larger sliders for easier grabbing and scrolling */
+        input[type="range"] { -webkit-appearance: none; background: transparent; cursor: pointer; height: 24px; }
+        input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 8px; background: #444; border-radius: 4px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 22px; width: 22px; border-radius: 50%; background: #0af; margin-top: -7px; box-shadow: 0 0 4px rgba(0,0,0,0.8); }
+        input[type="range"]::-moz-range-track { width: 100%; height: 8px; background: #444; border-radius: 4px; }
+        input[type="range"]::-moz-range-thumb { height: 22px; width: 22px; border-radius: 50%; background: #0af; border: none; box-shadow: 0 0 4px rgba(0,0,0,0.8); }
+    </style>
+</head>
+<body>
+    <h1 style="text-align:center; color: #0af; margin-bottom: 10px;">Dual 4-Phase Spatial Sequencer</h1>
+
+    <!-- NEW: Master Recorder Panel -->
+    <div style="text-align:center; margin-bottom: 30px; padding: 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <button id="btnMasterRecord" style="padding: 10px 24px; background: #e33; color: #fff; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1em; transition: background 0.2s;">🔴 Start Master Recording</button>
+        <div id="recordStatus" style="margin-top: 10px; color: #aaa; font-style: italic; font-size: 0.9em;">Ready to record session...</div>
+    </div>
+	
+	<!-- NEW: Video Player & Advanced Audio Sync Panel -->
+    <div style="margin-bottom: 30px; padding: 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; max-width: 800px; margin-left: auto; margin-right: auto;">
+        <h3 style="color: #9cf; margin-top: 0; text-align: center;">🎬 Advanced Video Beat Sync</h3>
+        
+        <input type="file" id="videoLoader" accept="video/*" style="display: block; margin: 0 auto 15px auto; padding: 10px; background: #222; border: 1px solid #555; border-radius: 4px; width: 80%;">
+        
+        <!-- NEW: Detection Mode Selector -->
+        <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 15px;">
+            <label style="cursor: pointer; background: #111; padding: 8px 15px; border-radius: 4px; border: 1px solid #0af; color: #0af;">
+                <input type="radio" name="detectMode" value="energy" checked> 🔊 Energy (Volume)
+            </label>
+            <label style="cursor: pointer; background: #111; padding: 8px 15px; border-radius: 4px; border: 1px solid #f69; color: #f69;">
+                <input type="radio" name="detectMode" value="transient"> ⚡ Transient (Flux)
+            </label>
+            <label style="cursor: pointer; background: #111; padding: 8px 15px; border-radius: 4px; border: 1px solid #0f9; color: #0f9;">
+                <input type="radio" name="detectMode" value="visual"> 👁️ Visual (Pixels)
+            </label>
+        </div>
+
+        <!-- Video & Target Overlay Container -->
+        <div id="videoContainer" style="position: relative; width: 100%; display: flex; justify-content: center; background: #000; border-radius: 4px; border: 1px solid #444; margin-bottom: 10px; overflow: hidden;">
+            <video id="beatVideo" controls style="width: 100%; max-height: 400px;"></video>
+            
+            <!-- Draggable Pixel Targeting Box (Hidden by default) -->
+            <div id="pixelTarget" style="display: none; position: absolute; border: 2px solid #0f9; width: 60px; height: 60px; top: 50%; left: 50%; transform: translate(-50%, -50%); cursor: grab; box-shadow: 0 0 10px rgba(0,255,153,0.5); background: rgba(0,255,153,0.1);">
+                <div id="pixelResizeHandle" style="position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; background: #0f9; cursor: nesw-resize; border-radius: 50%;"></div>
+            </div>
+        </div>
+        
+        <!-- Accordion 1: Live Visualizer -->
+        <details id="detailsVisualizer" open style="background: #111; padding: 10px; border-radius: 4px; border: 1px solid #444; margin-bottom: 15px;">
+            <summary style="cursor: pointer; color: #9cf; font-weight: bold; outline: none;">📊 Live Audio/Pixel Visualizer</summary>
+            
+            <div style="position: relative; width: 100%; height: 120px; background: #000; border: 1px solid #555; border-radius: 4px; margin-top: 10px; overflow: hidden;">
+                <canvas id="audioVisualizer" style="width: 100%; height: 100%; cursor: crosshair;"></canvas>
+                <div id="hoverFreqText" style="position: absolute; top: 5px; right: 10px; color: #0af; font-family: monospace; font-size: 0.9em; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; pointer-events: none;">Hover to probe Hz</div>
+                <div id="beatFlash" style="position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: #0f9; opacity: 0; pointer-events: none;"></div>
+            </div>
+        </details>
+        
+        <!-- Accordion 2: Beat Sync Controls -->
+        <details open style="background: #111; padding: 10px; border-radius: 4px; border: 1px solid #444; margin-bottom: 15px;">
+            <summary style="cursor: pointer; color: #9cf; font-weight: bold; outline: none;">🎛️ Detection & Ramping Controls</summary>
+            
+            <!-- DSP Controls -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 15px; font-size: 0.9em;">
+                <!-- Left Column: Filter -->
+                <div id="panelFilter">
+                    <label style="display:block; margin-bottom: 5px; color: #f69;">Filter Type:</label>
+                    <select id="ctrlFilterType" style="width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; margin-bottom: 15px;">
+                        <option value="lowpass">Low-Pass (Kick/Bass)</option>
+                        <option value="highpass">High-Pass (Hi-Hats/Clicks)</option>
+                        <option value="bandpass">Band-Pass (Isolate Specific Pitch)</option>
+                        <option value="lowshelf">Low-Shelf</option>
+                    </select>
+                    <label style="display:block; margin-bottom: 5px; color: #f69;">Target Freq: <span id="valFreq">200</span> Hz</label>
+                    <input type="range" id="ctrlFreq" min="20" max="10000" step="10" value="200" style="width: 100%; margin-bottom: 15px;">
+                    <label style="display:block; margin-bottom: 5px; color: #f69;">Bandwidth (Q-Factor): <span id="valQ">1.0</span></label>
+                    <input type="range" id="ctrlQ" min="0.1" max="20" step="0.1" value="1.0" style="width: 100%;">
+                </div>
+
+                <!-- Right Column: Algorithm -->
+                <div>
+                    <label style="display:block; margin-bottom: 5px; color: #0af;">FFT Size (Audio Res):</label>
+                    <select id="ctrlFFT" style="width: 100%; padding: 6px; background: #222; color: #fff; border: 1px solid #555; border-radius: 4px; margin-bottom: 15px;">
+                        <option value="64">64 (Fastest Time)</option>
+                        <option value="128">128</option>
+                        <option value="256" selected>256 (Balanced)</option>
+                        <option value="512">512</option>
+                        <option value="1024">1024 (Exact Pitch)</option>
+                    </select>
+                    <label style="display:block; margin-bottom: 5px; color: #0af;">Spike Threshold (+%): <span id="valSpike">15</span>%</label>
+                    <input type="range" id="ctrlSpike" min="1" max="100" value="15" style="width: 100%; margin-bottom: 15px;">
+                    <label style="display:block; margin-bottom: 5px; color: #0af;">Min Floor/Brightness: <span id="valFloor">10</span> / 255</label>
+                    <input type="range" id="ctrlFloor" min="0" max="255" value="10" style="width: 100%;">
+                </div>
+            </div>
+
+            <!-- Ramping & Smoothing Controls -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.9em; margin-top: 20px; padding-top: 15px; border-top: 1px solid #333;">
+                <div>
+                    <label style="display:block; margin-bottom: 5px; color: #f90;">Averaging Window: <span id="valSmooth">4</span> beats</label>
+                    <input type="range" id="ctrlSmooth" min="1" max="16" step="1" value="4" style="width: 100%; margin-bottom: 15px;">
+                    <label style="display:block; margin-bottom: 5px; color: #f90;">Ramp-Up Speed: <span id="valRampUp">0.010</span></label>
+                    <input type="range" id="ctrlRampUp" min="0.001" max="0.100" step="0.001" value="0.010" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display:block; margin-bottom: 5px; color: #f55;">Breakdown Timeout: <span id="valTimeout">2.5</span> sec</label>
+                    <input type="range" id="ctrlTimeout" min="0.5" max="10.0" step="0.1" value="2.5" style="width: 100%; margin-bottom: 15px;">
+                    <label style="display:block; margin-bottom: 5px; color: #f55;">Decay Falloff Speed: <span id="valRampDown">0.002</span></label>
+                    <input type="range" id="ctrlRampDown" min="0.0001" max="0.0200" step="0.0001" value="0.002" style="width: 100%;">
+                </div>
+            </div>
+        </details>
+
+        <div style="font-size: 1.2em; text-align: center; margin-top: 20px;">
+            Speed Output: <strong id="detectedHzVal" style="color: #0f9;">0.00</strong> <span style="color:#777;">Hz</span>
+        </div>
+    </div>
+
+    <!-- Dynamic Deck Controls -->
+    <div style="text-align:center; margin-bottom: 20px;">
+        <button id="btnAddDeck" style="padding: 8px 16px; background: #0af; color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 1em;">➕ Add Another Deck</button>
+    </div>
+
+    <!-- Empty container where decks will spawn -->
+    <div id="decksContainer" class="dashboard-container"></div>
+
+    <!-- THE DECK TEMPLATE (Invisible until spawned) -->
+    <template id="deckTemplate">
+        <div class="deck">
+            
+			<!-- LEFT PANEL: Primary Sequencer Controls -->
+            <div style="background: #222; padding: 20px; border-radius: 8px; width: 330px; border: 1px solid #444; display: flex; flex-direction: column;">
+                
+                <!-- 1. Connection Panel Accordion -->
+                <details class="wsContainer" open style="margin-bottom:20px; padding:12px; background:#1b1b1b; border:1px solid #333; border-radius:8px; transition: border-color 0.3s;">
+                    <summary style="cursor: pointer; color: #9cf; font-weight: bold; outline: none; margin-bottom: 10px;">
+                        📡 Connection: <span class="wsSummaryStatus" style="color:#777; font-weight:normal;">Disconnected</span>
+                    </summary>
+                    <select class="wsPresetSelect" style="width: 100%; padding:6px; background:#333; color:#eee; border:1px solid #555; border-radius:4px; margin-bottom: 8px;">
+                        <option value="ws://10.20.42.125:8080">Default Bridge</option>
+                        <option value="ws://127.0.0.1:12349/tcode">Local ReStim (Port 12349)</option>
+                        <option value="ws://127.0.0.1:12350/tcode">Local ReStim (Port 12350)</option>
+                    </select>
+                    <input type="text" class="wsAddress" size="25" style="width: 100%; box-sizing: border-box; padding:6px; background:#333; border:1px solid #555; color:#eee; border-radius:4px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <button class="btnConnect" style="padding:6px 12px; background:#0af; color:#000; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Connect</button>
+                        <span class="streamStatus" style="color:#777; font-size: 0.9em;">Disconnected</span>
+                    </div>
+                </details>
+
+                <!-- 2. Primary Playback Controls -->
+                <button class="btnPlayPause" style="width: 100%; padding: 10px; background: #0f9; color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 15px; font-size: 1.1em;">▶ Start Sequencer</button>
+
+                <label style="display:block; margin-bottom: 5px;">Pattern / Macro:</label>
+                <select class="seqPattern" style="width: 100%; padding: 8px; background: #333; color: #fff; border: 1px solid #555; margin-bottom: 25px; font-size: 1em;">
+                    <optgroup class="optDiagSeq" label="Diamond Grid: Sequences">
+                        <option value="static">Static (Anchor Ring Only)</option>
+                        <option value="round_robin" selected>Round Robin (A->B->C->D)</option>
+                        <option value="reverse_robin">Reverse Robin (D->C->B->A)</option>
+                        <option value="vertical">Vertical Ping-Pong (A ↔ C)</option>
+                        <option value="horizontal">Horizontal Ping-Pong (D ↔ B)</option>
+                        <option value="diag_ad_bc">Diagonal: AD ↔ BC (Top-Left to Bottom-Right)</option>
+                        <option value="diag_cd_ab">Diagonal: CD ↔ AB (Bottom-Left to Top-Right)</option>
+                        <option value="pendulum">Pendulum Sweep (Adjustable Arc)</option>
+                        <option value="radius_pulse">Radius Pulse (Center Outward)</option>
+                    </optgroup>
+                    <optgroup class="optDiagMac" label="Diamond Grid: Macros">
+                        <option value="macro_toggle_bc">Toggle B/C (A & D Solid On)</option>
+                        <option value="macro_toggle_ad">Toggle A/D (B & C Solid On)</option>
+                        <option value="macro_toggle_cd">Toggle C/D (A & B Solid On)</option>
+                        <option value="macro_toggle_ab">Toggle A/B (C & D Solid On)</option>
+                    </optgroup>
+                    <optgroup class="optTess" label="Tessellation Grid: Sequences & Macros" style="display: none;">
+                        <option value="tess_cw_orbit">CW Orbit</option>
+                        <option value="tess_ccw_orbit">CCW Orbit</option>
+						<option value="tess_pendulum">Pendulum Sweep (Adjustable Arc)</option>
+                        <option value="tess_vertical">Vertical Ping-Pong</option>
+                        <option value="tess_horizontal">Horizontal Ping-Pong</option>
+                        <option value="tess_diag_tl_br">Top Left ↔ Bottom Right (60° Edge)</option>
+                        <option value="tess_diag_bl_tr">Bottom Left ↔ Top Right (60° Edge)</option>
+                        <option value="tess_macro_bc">Toggle B/C (A & D Solid On)</option>
+                        <option value="tess_macro_ad">Toggle A/D (B & C Solid On)</option>
+                        <option value="tess_macro_ac_bd_flipflop">Toggle A/C & B/D (Flip Flop)</option>
+                        <option value="tess_macro_a_center">Pulse A ↔ Center (Focus/Diffuse)</option>
+                        <option value="tess_radius_pulse">Radius Pulse (Center Outward)</option>
+                    </optgroup>
+                </select>
+
+                <!-- 3. Primary Modifier Sliders -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label>Speed (Hz): <span class="seqSpeedVal">1.00</span></label>
+                    <label style="font-size: 0.85em; color: #0f9; cursor: pointer;">
+                        <input type="checkbox" class="syncBeatToggle"> Sync to Video
+                    </label>
+                </div>
+                <input type="range" class="seqSpeed" min="0.01" max="20" step="0.01" value="1.00" style="width: 100%; margin-bottom: 20px;">
+
+                <!-- New Orbit Radius Container -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label>Orbit Radius (%): <span class="seqRadiusVal">100</span></label>
+                    <label style="font-size: 0.85em; color: #0f9; cursor: pointer;">
+                        <input type="checkbox" class="syncRadiusToggle" checked> Sync both axes
+                    </label>
+                </div>
+                
+                <div class="mainRadiusContainer">
+                    <input type="range" class="seqRadius" min="0" max="100" value="100" style="width: 100%; margin-bottom: 20px;">
+                </div>
+                
+                <div class="splitRadiusContainer" style="display: none; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color: #9cf;">H-Radius (%): <span class="seqRadiusXVal">100</span></label>
+                        <input type="range" class="seqRadiusX" min="0" max="100" value="100" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color: #f69;">V-Radius (%): <span class="seqRadiusYVal">100</span></label>
+                        <input type="range" class="seqRadiusY" min="0" max="100" value="100" style="width: 100%;">
+                    </div>
+                </div>
+                
+                <label style="display:block; margin-bottom: 5px;">Sweep Arc (°): <span class="seqSweepArcVal">360</span></label>
+                <input type="range" class="seqSweepArc" min="0" max="360" step="1" value="360" style="width: 100%; margin-bottom: 20px;">
+
+                <label style="display:block; margin-bottom: 5px;">End Pause (ms): <span class="seqPauseMsVal">10</span></label>
+                <input type="range" class="seqPauseMs" min="0" max="1000" step="10" value="10" style="width: 100%; margin-bottom: 20px;">
+
+                <label style="display:block; margin-bottom: 5px;">Rotation Angle (°): <span class="seqAngleVal">0</span></label>
+                <input type="range" class="seqAngle" min="-180" max="180" step="1" value="0" style="width: 100%; margin-bottom: 25px;">
+
+                <label style="display:block; margin-bottom: 5px;">Master Volume (%): <span class="masterVolVal">100</span></label>
+                <input type="range" class="masterVol" min="0" max="100" value="100" style="width: 100%;">
+
+                <!-- 4. Advanced Settings Tab Menu -->
+                <div style="margin-top: auto; border-top: 1px solid #444; padding-top: 20px;">
+                    <label style="display:block; margin-bottom: 10px; color: #aaa; font-weight: bold; text-transform: uppercase; font-size: 0.85em;">Advanced Settings</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button class="btnTab tabEngine" data-target="paneEngine" style="padding: 10px; background: #333; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">⚙️ Engine Mode</button>
+                        <button class="btnTab tabSnap" data-target="paneSnap" style="display: none; padding: 10px; background: #333; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">📍 Snap To Grid (Tessellation)</button>
+                        <button class="btnTab tabLFO" data-target="paneLFO" style="padding: 10px; background: #333; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">⚙️ LFO (Auto-Motion)</button>
+                        <button class="btnTab tabRestim" data-target="paneRestim" style="padding: 10px; background: #333; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">⚡ ReStim Modifiers</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: Visualizer, Canvas, & Secondary Area -->
+            <div style="display: flex; flex-direction: column; align-items: center; width: 525px;">
+                
+                <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px;">
+                    <h3 class="deckTitle" style="color: #f69; margin: 0; font-size: 1.5em;">Deck</h3>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="color: #9cf; font-weight: bold;">Grid Mode:</label>
+                        <select class="viewMode" style="padding: 6px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px;">
+                            <option value="diamond">Diamond (Geometric)</option>
+                            <option value="barycentric">Tessellation (Barycentric)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <canvas class="diamondCanvas" width="525" height="525" style="border: 2px solid #555; border-radius: 8px; cursor: crosshair; touch-action: none; background: #111;"></canvas>
+                
+                <div class="waterLevelsContainer" style="display: none; width: 350px; height: 80px; margin-top: 15px; border: 2px solid #555; border-radius: 8px; overflow: hidden; background: #111;">
+                    <canvas class="waterLevelsCanvas" width="350" height="80"></canvas>
+                </div>
+
+                <button class="btnCenterReset" style="margin-top: 15px; padding: 10px; width: 100%; font-weight: bold; cursor: pointer;">Reset Anchor Ring to Center</button>
+
+                <!-- THE NEW SECONDARY CONTROL AREA -->
+                <div class="secondaryControlsArea" style="width: 100%; margin-top: 20px; background: #1a1a1a; padding: 20px; border-radius: 8px; border: 1px solid #444; min-height: 150px; box-sizing: border-box;">
+                    
+                    <!-- Default Empty State -->
+                    <div class="pane emptyState" style="text-align: center; color: #777; padding-top: 25px; font-style: italic;">
+                        Select an advanced setting from the left menu to configure it here.
+                    </div>
+
+                    <!-- PANE: Engine Mode -->
+                    <div class="pane paneEngine" style="display: none;">
+                        <h4 style="color: #9cf; margin-top: 0; margin-bottom: 15px;">⚙️ Engine Mode</h4>
+                        <div style="display: flex; gap: 15px; font-size: 0.9em;">
+                            <label style="flex: 1; cursor: pointer; background: #111; padding: 12px; border-radius: 4px; border: 1px solid #555; text-align: center;">
+                                <input type="radio" name="seqEngine" value="geometric"> 
+                                <strong style="display:block; margin-top: 8px;">Geometric Axis</strong>
+                            </label>
+                            <label style="flex: 1; cursor: pointer; background: #111; padding: 12px; border-radius: 4px; border: 1px solid #555; text-align: center;">
+                                <input type="radio" name="seqEngine" value="intensity" checked> 
+                                <strong style="display:block; margin-top: 8px;">Intensity Modulated</strong>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- PANE: Snap To Grid -->
+                    <div class="pane paneSnap" style="display: none;">
+                        <h4 style="color: #9cf; margin-top: 0; margin-bottom: 15px;">📍 Snap To Grid Point</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; font-size: 0.85em;">
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <strong style="color:#777; border-bottom: 1px solid #333; padding-bottom: 4px;">Centers</strong>
+                                <label><input type="radio" name="tessSnap" value="center_a"> A (Red)</label>
+                                <label><input type="radio" name="tessSnap" value="center_b"> B (Blue)</label>
+                                <label><input type="radio" name="tessSnap" value="center_c"> C (Yellow)</label>
+                                <label><input type="radio" name="tessSnap" value="center_d"> D (Green)</label>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <strong style="color:#777; border-bottom: 1px solid #333; padding-bottom: 4px;">Vertices</strong>
+                                <label><input type="radio" name="tessSnap" value="vert_aa"> A / A</label>
+                                <label><input type="radio" name="tessSnap" value="vert_bb"> B / B</label>
+                                <label><input type="radio" name="tessSnap" value="vert_cc"> C / C</label>
+                                <label><input type="radio" name="tessSnap" value="vert_dd"> D / D</label>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <strong style="color:#777; border-bottom: 1px solid #333; padding-bottom: 4px;">Edges</strong>
+                                <label><input type="radio" name="tessSnap" value="edge_ab"> A / B</label>
+                                <label><input type="radio" name="tessSnap" value="edge_ac"> A / C</label>
+                                <label><input type="radio" name="tessSnap" value="edge_ad"> A / D</label>
+                                <label><input type="radio" name="tessSnap" value="edge_bc"> B / C</label>
+                                <label><input type="radio" name="tessSnap" value="edge_bd"> B / D</label>
+                                <label><input type="radio" name="tessSnap" value="edge_cd"> C / D</label>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
+                            <label style="font-style: italic; color: #aaa;"><input type="radio" name="tessSnap" value="free" checked> Free Drag / Manual Control</label>
+                        </div>
+                    </div>
+
+                    <!-- PANE: LFO -->
+                    <div class="pane paneLFO" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h4 style="color: #9cf; margin: 0;">⚙️ LFO (Advanced Auto-Motion)</h4>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btnSyncLFO" style="padding: 6px 12px; background: #444; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer;">🔄 Sync</button>
+                                <button class="btnResetLFO" style="padding: 6px 12px; background: #522; color: #f99; border: 1px solid #733; border-radius: 4px; cursor: pointer;">⏹ Stop & Center</button>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                            <div>
+                                <label style="display:block; margin-bottom: 5px;">Horizontal Width (%): <span class="advHWidthVal">0</span></label>
+                                <input type="range" class="advHWidth" min="0" max="100" value="0" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px;">Horizontal Speed (Hz): <span class="advHSpeedVal">0.20</span></label>
+                                <input type="range" class="advHSpeed" min="0.01" max="20" step="0.01" value="0.20" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display:block; margin-bottom: 5px;">Vertical Width (%): <span class="advVWidthVal">0</span></label>
+                                <input type="range" class="advVWidth" min="0" max="100" value="0" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px;">Vertical Speed (Hz): <span class="advVSpeedVal">0.20</span></label>
+                                <input type="range" class="advVSpeed" min="0.01" max="20" step="0.01" value="0.20" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PANE: ReStim Modifiers -->
+                    <div class="pane paneRestim" style="display: none;">
+                        <h4 style="color: #9cf; margin-top: 0; margin-bottom: 15px;">⚡ ReStim Modifiers</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: x 30px;">
+                            <!-- Left Column -->
+                            <div style="padding-right: 15px; border-right: 1px solid #333;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: #f90;">
+                                    <input type="checkbox" class="chkC0"> Carrier Freq (C0): <span class="rsC0Val">2000</span> Hz
+                                </label>
+                                <input type="range" class="rsC0" min="500" max="2000" step="1" value="2000" style="width: 100%; margin-bottom: 20px;">
+                                
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: #f90;">
+                                    <input type="checkbox" class="chkP0"> Pulse Freq (P0): <span class="rsP0Val">50</span> Hz
+                                </label>
+                                <input type="range" class="rsP0" min="10" max="200" step="1" value="50" style="width: 100%; margin-bottom: 20px;">
+
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: #f90;">
+                                    <input type="checkbox" class="chkP1"> Pulse Width (P1): <span class="rsP1Val">7</span>
+                                </label>
+                                <input type="range" class="rsP1" min="2" max="20" step="0.1" value="7" style="width: 100%;">
+                            </div>
+                            <!-- Right Column -->
+                            <div style="padding-left: 15px;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: #f90;">
+                                    <input type="checkbox" class="chkP2"> Interval Random (P2): <span class="rsP2Val">0.00</span>
+                                </label>
+                                <input type="range" class="rsP2" min="0" max="1" step="0.01" value="0" style="width: 100%; margin-bottom: 20px;">
+                                
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: #f90;">
+                                    <input type="checkbox" class="chkP3"> Pulse Rise Time (P3): <span class="rsP3Val">2</span>
+                                </label>
+                                <input type="range" class="rsP3" min="2" max="20" step="1" value="2" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- End Secondary Area -->
+
+            </div>
+			
+        </div>
+    </template>
+	
+    <!-- Scripts -->
+    <script type="module" src="js/fourphase_stream.js"></script>
+	<script src="js/video_beat_sync.js"></script>
+</body>
+</html>

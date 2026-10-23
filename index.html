@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Visual eStim-ulator</title>
+	<link rel="icon" href="data:,">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body { font-family: sans-serif; background: var(--bg); color: var(--cream); margin: 0; padding: 20px; }
+        .dashboard-container { display: flex; gap: 40px; justify-content: center; align-items: flex-start; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 20px; }
+        .deck { display: flex; gap: 30px; padding: 20px; background: #111; border: 2px solid #333; border-radius: 12px; }
+        
+        input[type="range"] { -webkit-appearance: none; background: transparent; cursor: pointer; height: 24px; }
+        input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 8px; background: #444; border-radius: 4px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; height: 22px; width: 22px; border-radius: 50%; background: var(--purple); margin-top: -7px; box-shadow: 0 0 4px rgba(0,0,0,0.8); }
+        
+        /* Firefox Slider Support */
+        input[type="range"]::-moz-range-track { width: 100%; height: 8px; background: #444; border-radius: 4px; }
+        input[type="range"]::-moz-range-thumb { height: 22px; width: 22px; border-radius: 50%; background: var(--purple); border: none; box-shadow: 0 0 4px rgba(0,0,0,0.8); cursor: pointer; }
+        
+        #advancedVideoPanel label {
+            text-align: left !important;
+            display: block !important;
+            justify-content: flex-start !important;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align:center; color: var(--purple); margin-bottom: 10px;">The Visual eStim-ulator</h1>
+    <p style="text-align:center; color: var(--muted); font-size:0.9em; margin:8px 0 16px;">Modular eStim generation for the FOC-stim</p>
+
+    <!-- Master Recorder Panel -->
+    <div style="text-align:center; margin-bottom: 30px; padding: 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <button id="btnMasterRecord" style="padding: 10px 24px; background: var(--start-green); color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1em; transition: background 0.2s;">▶ Start Master Recording</button>
+        <div id="recordStatus" style="margin-top: 10px; color: var(--muted); font-style: italic; font-size: 0.9em;">Ready to record session...</div>
+    </div>
+	
+    <!-- Advanced Video Beat Sync Panel -->
+    <details id="advancedVideoPanel" style="margin-bottom: 30px; padding: 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; max-width: 800px; margin-left: auto; margin-right: auto;">
+        <summary style="cursor: pointer; outline: none; text-align: center; list-style-position: inside;">
+            <h3 style="color: var(--purple-light); margin: 0; display: inline-block;">🎬 Advanced Video Beat Sync</h3>
+        </summary>
+        
+        <div style="margin-top: 20px;">
+            <input type="file" id="videoLoader" accept="video/*" style="display: block; margin: 0 auto 15px auto; padding: 10px; background: #222; border: 1px solid #555; border-radius: 4px; width: 80%;">
+            
+            <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 15px;">
+                <label style="cursor: pointer; background: #111; padding: 8px 15px; border-radius: 4px; border: 1px solid var(--purple); color: var(--purple);"><input type="radio" name="detectMode" value="energy" checked> 🔊 Energy</label>
+                <label style="cursor: pointer; background: #111; padding: 8px 15px; border-radius: 4px; border: 1px solid var(--gold); color: var(--gold);"><input type="radio" name="detectMode" value="transient"> ⚡ Transient</label>
+                <label style="cursor: pointer; background: #111; padding: 8px 15px; border-radius: 4px; border: 1px solid var(--cream); color: var(--cream);"><input type="radio" name="detectMode" value="visual"> 👁️ Visual</label>
+            </div>
+
+            <div id="videoContainer" style="position: relative; width: 100%; display: flex; justify-content: center; background: #000; border-radius: 4px; border: 1px solid #444; margin-bottom: 10px; overflow: hidden;">
+                <video id="beatVideo" controls style="width: 100%; max-height: 400px;"></video>
+                <div id="pixelTarget" style="display: none; position: absolute; border: 2px solid var(--gold); width: 60px; height: 60px; top: 50%; left: 50%; transform: translate(-50%, -50%); cursor: grab; background: rgba(255,202,40,0.1);">
+                    <div id="pixelResizeHandle" style="position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; background: var(--gold); cursor: nesw-resize; border-radius: 50%;"></div>
+                </div>
+            </div>
+			
+			<!-- DAW Timeline Sequencer -->
+            <details id="sequencerContainer" open style="width: 100%; margin-bottom: 15px; background: #111; border: 1px solid #444; border-radius: 4px; padding: 10px; box-sizing: border-box;">
+                <summary style="cursor: pointer; outline: none; list-style: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <h4 style="color: var(--purple-light); margin: 0; font-size: 1em;">⏱️ Sequence Timeline</h4>
+                            <button id="btnSaveSequence" style="padding: 4px 8px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 0.85em;">💾 Save Track</button>
+                            <label style="padding: 4px 8px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
+                                📂 Load Track
+                                <input type="file" id="btnLoadSequence" accept=".json" style="display: none;">
+                            </label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 20px;" onclick="event.preventDefault();">
+                            <label style="font-size: 0.85em; color: var(--gold); display: flex; align-items: center; gap: 8px;">
+                                Zoom (Shift+Wheel): 
+                                <input type="range" id="timelineZoom" min="1" max="100" value="1" style="width: 120px;">
+                            </label>
+                            <div style="font-size: 0.85em; color: var(--muted);">
+                                Time: <span id="timeDisplay">0.00</span>s / <span id="durationDisplay">0.00</span>s
+                            </div>
+                        </div>
+                    </div>
+                </summary>
+                
+                <div style="margin-top: 15px;">
+                    <!-- Scrollable Viewport for Panning -->
+                    <div id="timelineViewport" style="width: 100%; overflow-x: auto; background: #222; border: 1px solid #333; border-radius: 4px; padding-bottom: 8px;">
+                        
+                        <!-- The Stretched Container -->
+                        <div id="timelineScrollArea" style="width: 100%; position: relative;">
+                            
+                            <!-- The Time Ruler -->
+                            <div id="timelineRuler" style="height: 20px; position: relative; border-bottom: 1px solid #555; color: var(--muted); font-size: 0.75em; pointer-events: none;"></div>
+                            
+                            <!-- The Main Track -->
+                            <div id="timelineTrack" style="position: relative; width: 100%; height: 60px; overflow: hidden; cursor: crosshair;">
+                                
+                                <!-- The Playhead Line -->
+                                <div id="timelinePlayhead" style="position: absolute; top: 0; left: 0; width: 2px; height: 100%; background: var(--stop-red); z-index: 10; pointer-events: none;">
+                                    <div style="position: absolute; top: 0; left: -4px; width: 10px; height: 10px; background: var(--stop-red); border-radius: 50%;"></div>
+                                </div>
+                                
+                                <!-- Event Blocks -->
+                                <div id="timelineEventsContainer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+            
+            <!-- Accordion 1: Live Visualizer -->
+            <details id="detailsVisualizer" style="background: #111; padding: 10px; border-radius: 4px; border: 1px solid #444; margin-bottom: 15px;">
+                <summary style="cursor: pointer; color: var(--purple-light); font-weight: bold; outline: none;">📊 Live Audio/Pixel Visualizer</summary>
+                <div style="position: relative; width: 100%; height: 120px; background: #000; border: 1px solid #555; border-radius: 4px; margin-top: 10px; overflow: hidden;">
+                    <canvas id="audioVisualizer" style="width: 100%; height: 100%; cursor: crosshair;"></canvas>
+                    <div id="hoverFreqText" style="position: absolute; top: 5px; right: 10px; color: var(--purple); font-family: monospace; font-size: 0.9em; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; pointer-events: none;">Hover to probe Hz</div>
+                    <div id="beatFlash" style="position: absolute; top: 0; left: 0; width: 10px; height: 100%; background: var(--gold); opacity: 0; pointer-events: none;"></div>
+                </div>
+            </details>
+            
+            <!-- Accordion 2: Beat Sync Controls -->
+            <details style="background: #111; padding: 10px; border-radius: 4px; border: 1px solid #444; margin-bottom: 15px; text-align: left;">
+                <summary style="cursor: pointer; color: var(--purple-light); font-weight: bold; outline: none;">🎛️ Detection & Ramping Controls</summary>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 15px; font-size: 0.9em;">
+                    <div id="panelFilter">
+                        <label style="display:block; margin-bottom: 5px; color: var(--gold);">Filter Type:</label>
+                        <select id="ctrlFilterType" style="width: 100%; padding: 6px; background: #222; color: var(--cream); border: 1px solid #555; border-radius: 4px; margin-bottom: 15px;">
+                            <option value="lowpass">Low-Pass (Kick/Bass)</option>
+                            <option value="highpass">High-Pass (Hi-Hats/Clicks)</option>
+                            <option value="bandpass">Band-Pass (Isolate Specific Pitch)</option>
+                            <option value="lowshelf">Low-Shelf</option>
+                        </select>
+                        <label style="display:block; margin-bottom: 5px; color: var(--gold);">Target Freq: <span id="valFreq">200</span> Hz</label>
+                        <input type="range" id="ctrlFreq" min="20" max="10000" step="10" value="200" style="width: 100%; margin-bottom: 15px;">
+                        <label style="display:block; margin-bottom: 5px; color: var(--gold);">Bandwidth (Q-Factor): <span id="valQ">1.0</span></label>
+                        <input type="range" id="ctrlQ" min="0.1" max="20" step="0.1" value="1.0" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom: 5px; color: var(--purple);">FFT Size (Audio Res):</label>
+                        <select id="ctrlFFT" style="width: 100%; padding: 6px; background: #222; color: var(--cream); border: 1px solid #555; border-radius: 4px; margin-bottom: 15px;">
+                            <option value="64">64 (Fastest Time)</option>
+                            <option value="128">128</option>
+                            <option value="256" selected>256 (Balanced)</option>
+                            <option value="512">512</option>
+                            <option value="1024">1024 (Exact Pitch)</option>
+                        </select>
+                        <label style="display:block; margin-bottom: 5px; color: var(--purple);">Spike Threshold (+%): <span id="valSpike">15</span>%</label>
+                        <input type="range" id="ctrlSpike" min="1" max="100" value="15" style="width: 100%; margin-bottom: 15px;">
+                        <label style="display:block; margin-bottom: 5px; color: var(--purple);">Min Floor/Brightness: <span id="valFloor">10</span> / 255</label>
+                        <input type="range" id="ctrlFloor" min="0" max="255" value="10" style="width: 100%;">
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 0.9em; margin-top: 20px; padding-top: 15px; border-top: 1px solid #333;">
+                    <div>
+                        <label style="display:block; margin-bottom: 5px; color: var(--gold);">Averaging Window: <span id="valSmooth">4</span> beats</label>
+                        <input type="range" id="ctrlSmooth" min="1" max="16" step="1" value="4" style="width: 100%; margin-bottom: 15px;">
+                        <label style="display:block; margin-bottom: 5px; color: var(--gold);">Ramp-Up Speed: <span id="valRampUp">0.010</span></label>
+                        <input type="range" id="ctrlRampUp" min="0.001" max="0.100" step="0.001" value="0.010" style="width: 100%;">
+                    </div>
+                    <div>
+                        <label style="display:block; margin-bottom: 5px; color: var(--purple-light);">Breakdown Timeout: <span id="valTimeout">2.5</span> sec</label>
+                        <input type="range" id="ctrlTimeout" min="0.5" max="10.0" step="0.1" value="2.5" style="width: 100%; margin-bottom: 15px;">
+                        <label style="display:block; margin-bottom: 5px; color: var(--purple-light);">Decay Falloff Speed: <span id="valRampDown">0.002</span></label>
+                        <input type="range" id="ctrlRampDown" min="0.0001" max="0.0200" step="0.0001" value="0.002" style="width: 100%;">
+                    </div>
+                </div>
+            </details>
+            
+            <div style="font-size: 1.2em; text-align: center; margin-top: 20px;">
+                Speed Output: <strong id="detectedHzVal" style="color: var(--gold);">0.00</strong> <span style="color: var(--muted);">Hz</span>
+            </div>
+        </div>
+    </details>
+	
+	<!-- Preset & Session Manager -->
+    <div style="margin-bottom: 30px; padding: 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; max-width: 800px; margin-left: auto; margin-right: auto;">
+        
+        <!-- File I/O Row -->
+        <div style="display: flex; justify-content: center; gap: 20px; align-items: center; padding-bottom: 15px; border-bottom: 1px solid #333;">
+            <button id="btnSaveLayout" style="padding: 10px 20px; background: var(--gold); color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; transition: background 0.2s;">💾 Save Layout to File</button>
+            <label style="color: var(--purple-light); font-weight: bold; cursor: pointer; padding: 10px 20px; background: #333; border: 1px solid #555; border-radius: 6px; font-size: 1em; transition: background 0.2s;">
+                📂 Load Layout from File
+                <input type="file" id="btnLoadLayout" accept=".json" style="display: none;">
+            </label>
+        </div>
+
+        <!-- Preset Bank Row -->
+        <div style="margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h4 style="color: var(--purple-light); margin: 0; font-size: 1.1em;">🎛️ Local Preset Bank</h4>
+                <div style="display: flex; gap: 10px;">
+                    <button id="btnExportBank" style="padding: 6px 12px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 0.9em;">📤 Export Bank</button>
+                    <label style="padding: 6px 12px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 0.9em;">
+                        📥 Import Bank
+                        <input type="file" id="btnImportBank" accept=".json" style="display: none;">
+                    </label>
+                    <button id="btnSaveToBank" style="padding: 8px 16px; background: var(--purple); color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer;">➕ Save Current State</button>
+                </div>
+            </div>
+            
+            <!-- Horizontal scrolling container for preset buttons -->
+            <div id="presetList" style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px;">
+                <div style="color: var(--muted); font-style: italic; font-size: 0.9em;">No presets saved yet.</div>
+            </div>
+        </div>
+    </div>
+	
+    <!-- Spawn Deck Buttons -->
+    <div style="text-align:center; margin-bottom: 30px; display: flex; justify-content: center; gap: 20px;">
+        <button id="btnAdd3Phase" style="padding: 10px 20px; background: var(--gold); color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1em;">➕ Add 3-Phase Deck</button>
+        <button id="btnAdd4Phase" style="padding: 10px 20px; background: var(--purple); color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; font-size: 1.1em;">➕ Add 4-Phase Deck</button>
+    </div>
+
+    <!-- Active Decks Container -->
+    <div id="decksContainer" class="dashboard-container"></div>
+
+    <!-- ========================================== -->
+    <!-- TEMPLATE 1: 4-PHASE DECK                   -->
+    <!-- ========================================== -->
+    <template id="deckTemplate4Phase">
+        <div class="deck deck-4phase">
+            <!-- LEFT PANEL: Primary Sequencer Controls -->
+            <div style="background: #222; padding: 20px; border-radius: 8px; width: 330px; border: 1px solid #444; display: flex; flex-direction: column;">
+                <details class="wsContainer" open style="margin-bottom:20px; padding:12px; background:#1b1b1b; border:1px solid #333; border-radius:8px; transition: border-color 0.3s;">
+                    <summary style="cursor: pointer; color: var(--purple-light); font-weight: bold; outline: none; margin-bottom: 10px;">
+                        📡 Connection: <span class="wsSummaryStatus" style="color: var(--muted); font-weight:normal;">Disconnected</span>
+                    </summary>
+                    <select class="wsPresetSelect" style="width: 100%; padding:6px; background:#333; color: var(--cream); border:1px solid #555; border-radius:4px; margin-bottom: 8px;">
+                        <option value="ws://10.20.42.125:8080">Default Bridge</option>
+                        <option value="ws://127.0.0.1:12349/tcode">Local ReStim (Port 12349)</option>
+                        <option value="ws://127.0.0.1:12350/tcode">Local ReStim (Port 12350)</option>
+                    </select>
+                    <input type="text" class="wsAddress" size="25" style="width: 100%; box-sizing: border-box; padding:6px; background:#333; border:1px solid #555; color: var(--cream); border-radius:4px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <button class="btnConnect" style="padding:6px 12px; background: var(--purple); color:#000; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Connect</button>
+                        <span class="streamStatus" style="color: var(--muted); font-size: 0.9em;">Disconnected</span>
+                    </div>
+                </details>
+
+                <button class="btnPlayPause" style="width: 100%; padding: 10px; background: var(--start-green); color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 15px; font-size: 1.1em;">▶ Start Deck</button>
+
+                <label style="display:block; margin-bottom: 5px;">Pattern / Macro:</label>
+                <select class="seqPattern" style="width: 100%; padding: 8px; background: #333; color: var(--cream); border: 1px solid #555; margin-bottom: 25px; font-size: 1em;">
+                    <optgroup class="optDiagSeq" label="Diamond Grid: Sequences">
+                        <option value="static">Static (Anchor Ring Only)</option>
+                        <option value="round_robin" selected>Round Robin (A->B->C->D)</option>
+                        <option value="reverse_robin">Reverse Robin (D->C->B->A)</option>
+                        <option value="vertical">Vertical Ping-Pong (A ↔ C)</option>
+                        <option value="horizontal">Horizontal Ping-Pong (D ↔ B)</option>
+                        <option value="diag_ad_bc">Diagonal: AD ↔ BC (Top-Left to Bottom-Right)</option>
+                        <option value="diag_cd_ab">Diagonal: CD ↔ AB (Bottom-Left to Top-Right)</option>
+                        <option value="pendulum">Pendulum Sweep (Adjustable Arc)</option>
+                        <option value="radius_pulse">Radius Pulse (Center Outward)</option>
+                    </optgroup>
+                    <optgroup class="optDiagMac" label="Diamond Grid: Macros">
+                        <option value="macro_toggle_bc">Toggle B/C (A & D Solid On)</option>
+                        <option value="macro_toggle_ad">Toggle A/D (B & C Solid On)</option>
+                        <option value="macro_toggle_cd">Toggle C/D (A & B Solid On)</option>
+                        <option value="macro_toggle_ab">Toggle A/B (C & D Solid On)</option>
+                    </optgroup>
+                    <optgroup class="optTess" label="Tessellation Grid: Sequences & Macros" style="display: none;">
+                        <option value="tess_cw_orbit">CW Orbit</option>
+                        <option value="tess_ccw_orbit">CCW Orbit</option>
+                        <option value="tess_pendulum">Pendulum Sweep (Adjustable Arc)</option>
+                        <option value="tess_vertical">Vertical Ping-Pong</option>
+                        <option value="tess_horizontal">Horizontal Ping-Pong</option>
+                        <option value="tess_diag_tl_br">Top Left ↔ Bottom Right (60° Edge)</option>
+                        <option value="tess_diag_bl_tr">Bottom Left ↔ Top Right (60° Edge)</option>
+                        <option value="tess_macro_bc">Toggle B/C (A & D Solid On)</option>
+                        <option value="tess_macro_ad">Toggle A/D (B & C Solid On)</option>
+                        <option value="tess_macro_ac_bd_flipflop">Toggle A/C & B/D (Flip Flop)</option>
+                        <option value="tess_macro_a_center">Pulse A ↔ Center (Focus/Diffuse)</option>
+                        <option value="tess_radius_pulse">Radius Pulse (Center Outward)</option>
+                    </optgroup>
+                </select>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label>Speed (Hz): <span class="seqSpeedVal">1.00</span></label>
+                    <label style="font-size: 0.85em; color: var(--gold); cursor: pointer;"><input type="checkbox" class="syncBeatToggle"> Sync</label>
+                </div>
+                <input type="range" class="seqSpeed" min="0.01" max="20" step="0.01" value="1.00" style="width: 100%; margin-bottom: 20px;">
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label>Orbit Radius (%): <span class="seqRadiusVal">100</span></label>
+                    <label style="font-size: 0.85em; color: var(--gold); cursor: pointer;"><input type="checkbox" class="syncRadiusToggle" checked> Sync Axes</label>
+                </div>
+                <div class="mainRadiusContainer">
+                    <input type="range" class="seqRadius" min="0" max="100" value="100" style="width: 100%; margin-bottom: 20px;">
+                </div>
+                <div class="splitRadiusContainer" style="display: none; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div><label style="font-size: 0.85em; color: var(--purple-light);">H-Radius: <span class="seqRadiusXVal">100</span></label><input type="range" class="seqRadiusX" min="0" max="100" value="100" style="width: 100%;"></div>
+                    <div><label style="font-size: 0.85em; color: var(--gold);">V-Radius: <span class="seqRadiusYVal">100</span></label><input type="range" class="seqRadiusY" min="0" max="100" value="100" style="width: 100%;"></div>
+                </div>
+                
+                <label style="display:block; margin-bottom: 5px;">Sweep Arc (°): <span class="seqSweepArcVal">360</span></label>
+                <input type="range" class="seqSweepArc" min="0" max="360" step="1" value="360" style="width: 100%; margin-bottom: 20px;">
+
+                <label style="display:block; margin-bottom: 5px;">End Pause (ms): <span class="seqPauseMsVal">10</span></label>
+                <input type="range" class="seqPauseMs" min="0" max="1000" step="10" value="10" style="width: 100%; margin-bottom: 20px;">
+
+                <label style="display:block; margin-bottom: 5px;">Rotation Angle (°): <span class="seqAngleVal">0</span></label>
+                <input type="range" class="seqAngle" min="-180" max="180" step="1" value="0" style="width: 100%; margin-bottom: 25px;">
+
+                <label style="display:block; margin-bottom: 5px;">Master Volume (%): <span class="masterVolVal">100</span></label>
+                <input type="range" class="masterVol" min="0" max="100" value="100" style="width: 100%;">
+
+                <div style="margin-top: auto; border-top: 1px solid #444; padding-top: 20px;">
+                    <label style="display:block; margin-bottom: 10px; color: var(--muted); font-weight: bold; text-transform: uppercase; font-size: 0.85em;">Advanced Settings</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button class="btnTab tabEngine" data-target="paneEngine" style="padding: 10px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">⚙️ Engine Mode</button>
+                        <button class="btnTab tabSnap" data-target="paneSnap" style="display: none; padding: 10px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">📍 Snap To Grid</button>
+                        <button class="btnTab tabLFO" data-target="paneLFO" style="padding: 10px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">⚙️ LFO (Auto-Motion)</button>
+                        <button class="btnTab tabRestim" data-target="paneRestim" style="padding: 10px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left; transition: 0.2s;">⚡ ReStim Modifiers</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL -->
+            <div style="display: flex; flex-direction: column; align-items: center; width: 525px;">
+                
+                <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px;">
+                    <h3 class="deckTitle" style="color: var(--purple); margin: 0; font-size: 1.5em;">Deck (4-Phase)</h3>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="color: var(--purple-light); font-weight: bold;">Grid Mode:</label>
+                        <select class="viewMode" style="padding: 6px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px;">
+                            <option value="diamond">Diamond (Geometric)</option>
+                            <option value="barycentric">Tessellation (Barycentric)</option>
+                        </select>
+                        <button class="btnCloseDeck" style="padding: 6px 12px; background: var(--stop-red); color: var(--cream); font-weight: bold; border: none; border-radius: 4px; cursor: pointer;">❌ Close</button>
+                    </div>
+                </div>
+                
+                <canvas class="diamondCanvas" width="525" height="525" style="border: 2px solid #555; border-radius: 8px; cursor: crosshair; touch-action: none; background: #111;"></canvas>
+                
+                <div class="waterLevelsContainer" style="display: none; width: 350px; height: 80px; margin-top: 15px; border: 2px solid #555; border-radius: 8px; overflow: hidden; background: #111;">
+                    <canvas class="waterLevelsCanvas" width="350" height="80"></canvas>
+                </div>
+
+                <button class="btnCenterReset" style="margin-top: 15px; padding: 10px; width: 100%; font-weight: bold; cursor: pointer;">Reset Anchor Ring to Center</button>
+
+                <div class="secondaryControlsArea" style="width: 100%; margin-top: 20px; background: #1a1a1a; padding: 20px; border-radius: 8px; border: 1px solid #444; min-height: 150px; box-sizing: border-box;">
+                    <div class="pane emptyState" style="text-align: center; color: var(--muted); padding-top: 25px; font-style: italic;">Select an advanced setting from the left menu.</div>
+
+                    <div class="pane paneEngine" style="display: none;">
+                        <h4 style="color: var(--purple-light); margin-top: 0; margin-bottom: 15px;">⚙️ Engine Mode</h4>
+                        <div style="display: flex; gap: 15px; font-size: 0.9em;">
+                            <label style="flex: 1; cursor: pointer; background: #111; padding: 12px; border-radius: 4px; border: 1px solid #555; text-align: center;">
+                                <input type="radio" name="seqEngine" value="geometric"> <strong style="display:block; margin-top: 8px;">Geometric Axis</strong>
+                            </label>
+                            <label style="flex: 1; cursor: pointer; background: #111; padding: 12px; border-radius: 4px; border: 1px solid #555; text-align: center;">
+                                <input type="radio" name="seqEngine" value="intensity" checked> <strong style="display:block; margin-top: 8px;">Intensity Modulated</strong>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pane paneSnap" style="display: none;">
+                        <h4 style="color: var(--purple-light); margin-top: 0; margin-bottom: 15px;">📍 Snap To Grid Point</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; font-size: 0.85em;">
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <strong style="color:var(--muted); border-bottom: 1px solid #333; padding-bottom: 4px;">Centers</strong>
+                                <label><input type="radio" name="tessSnap" value="center_a"> A (Red)</label>
+                                <label><input type="radio" name="tessSnap" value="center_b"> B (Blue)</label>
+                                <label><input type="radio" name="tessSnap" value="center_c"> C (Yellow)</label>
+                                <label><input type="radio" name="tessSnap" value="center_d"> D (Green)</label>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <strong style="color:var(--muted); border-bottom: 1px solid #333; padding-bottom: 4px;">Vertices</strong>
+                                <label><input type="radio" name="tessSnap" value="vert_aa"> A / A</label>
+                                <label><input type="radio" name="tessSnap" value="vert_bb"> B / B</label>
+                                <label><input type="radio" name="tessSnap" value="vert_cc"> C / C</label>
+                                <label><input type="radio" name="tessSnap" value="vert_dd"> D / D</label>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <strong style="color:var(--muted); border-bottom: 1px solid #333; padding-bottom: 4px;">Edges</strong>
+                                <label><input type="radio" name="tessSnap" value="edge_ab"> A / B</label>
+                                <label><input type="radio" name="tessSnap" value="edge_ac"> A / C</label>
+                                <label><input type="radio" name="tessSnap" value="edge_ad"> A / D</label>
+                                <label><input type="radio" name="tessSnap" value="edge_bc"> B / C</label>
+                                <label><input type="radio" name="tessSnap" value="edge_bd"> B / D</label>
+                                <label><input type="radio" name="tessSnap" value="edge_cd"> C / D</label>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #333;">
+                            <label style="font-style: italic; color: #aaa;"><input type="radio" name="tessSnap" value="free" checked> Free Drag / Manual Control</label>
+                        </div>
+                    </div>
+
+                    <div class="pane paneLFO" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h4 style="color: var(--purple-light); margin: 0;">⚙️ LFO (Advanced Auto-Motion)</h4>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btnSyncLFO" style="padding: 6px 12px; background: #444; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer;">🔄 Sync</button>
+                                <button class="btnResetLFO" style="padding: 6px 12px; background: #522; color: #f99; border: 1px solid #733; border-radius: 4px; cursor: pointer;">⏹ Stop</button>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                            <div>
+                                <label style="display:block; margin-bottom: 5px;">Horizontal Width (%): <span class="advHWidthVal">0</span></label>
+                                <input type="range" class="advHWidth" min="0" max="100" value="0" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px;">Horizontal Speed (Hz): <span class="advHSpeedVal">0.20</span></label>
+                                <input type="range" class="advHSpeed" min="0.01" max="20" step="0.01" value="0.20" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display:block; margin-bottom: 5px;">Vertical Width (%): <span class="advVWidthVal">0</span></label>
+                                <input type="range" class="advVWidth" min="0" max="100" value="0" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px;">Vertical Speed (Hz): <span class="advVSpeedVal">0.20</span></label>
+                                <input type="range" class="advVSpeed" min="0.01" max="20" step="0.01" value="0.20" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pane paneRestim" style="display: none;">
+                        <h4 style="color: var(--purple-light); margin-top: 0; margin-bottom: 15px;">⚡ ReStim Modifiers</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                            <div style="padding-right: 15px; border-right: 1px solid #333;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: var(--gold);"><input type="checkbox" class="chkC0"> Carrier Freq (C0): <span class="rsC0Val">2000</span> Hz</label>
+                                <input type="range" class="rsC0" min="500" max="2000" step="1" value="2000" style="width: 100%; margin-bottom: 20px;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: var(--gold);"><input type="checkbox" class="chkP0"> Pulse Freq (P0): <span class="rsP0Val">50</span> Hz</label>
+                                <input type="range" class="rsP0" min="10" max="200" step="1" value="50" style="width: 100%; margin-bottom: 20px;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: var(--gold);"><input type="checkbox" class="chkP1"> Pulse Width (P1): <span class="rsP1Val">7</span></label>
+                                <input type="range" class="rsP1" min="2" max="20" step="0.1" value="7" style="width: 100%;">
+                            </div>
+                            <div style="padding-left: 15px;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: var(--gold);"><input type="checkbox" class="chkP2"> Interval Random (P2): <span class="rsP2Val">0.00</span></label>
+                                <input type="range" class="rsP2" min="0" max="1" step="0.01" value="0" style="width: 100%; margin-bottom: 20px;">
+                                <label style="display:block; margin-bottom: 5px; font-size: 0.9em; color: var(--gold);"><input type="checkbox" class="chkP3"> Pulse Rise Time (P3): <span class="rsP3Val">2</span></label>
+                                <input type="range" class="rsP3" min="2" max="20" step="1" value="2" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- ========================================== -->
+    <!-- TEMPLATE 2: 3-PHASE DECK                   -->
+    <!-- ========================================== -->
+    <template id="deckTemplate3Phase">
+        <div class="deck deck-3phase">
+            <!-- LEFT PANEL: Primary Controls -->
+            <div style="background: #222; padding: 20px; border-radius: 8px; width: 350px; border: 1px solid #444; display: flex; flex-direction: column;">
+                <details class="wsContainer" open style="margin-bottom:20px; padding:12px; background:#1b1b1b; border:1px solid #333; border-radius:8px; transition: border-color 0.3s;">
+                    <summary style="cursor: pointer; color: var(--purple-light); font-weight: bold; outline: none; margin-bottom: 10px;">
+                        📡 Connection: <span class="wsSummaryStatus" style="color: var(--muted); font-weight:normal;">Disconnected</span>
+                    </summary>
+                    <select class="wsPresetSelect" style="width: 100%; padding:6px; background:#333; color: var(--cream); border:1px solid #555; border-radius:4px; margin-bottom: 8px;">
+                        <option value="ws://10.20.42.125:8080">Default Bridge</option>
+                        <option value="ws://127.0.0.1:12349/tcode">Local ReStim (Port 12349)</option>
+                        <option value="ws://127.0.0.1:12350/tcode">Local ReStim (Port 12350)</option>
+                    </select>
+                    <input type="text" class="wsAddress" value="ws://10.20.42.125:8080" style="box-sizing: border-box; padding:6px; background:#333; border:1px solid #555; color: var(--cream); border-radius:4px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <button type="button" class="connectStreamBtn" style="padding:6px 12px; background: var(--purple); color:#000; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Connect Bridge</button>
+                        <span class="streamStatus" style="color: var(--muted); font-size: 0.9em;">Disconnected</span>
+                    </div>
+                </details>
+
+                <button class="mainPlayStop" style="width: 100%; padding: 10px; background: var(--start-green); color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 20px; font-size: 1.1em;">▶ Start Deck</button>
+
+                <div style="margin-bottom: 25px;">
+                    <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px; width: auto; text-align: left;">Master Volume (%): <input type="text" class="masterVolText" value="100"></label>
+                    <input type="range" class="masterVol" min="0" max="100" value="100" style="width: 100%;">
+                </div>
+
+                <div style="margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #444;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <label style="width: auto; text-align: left;">Orbit Radius (%): <span class="orbitRadiusVal">100</span></label>
+                        <label style="font-size: 0.85em; color: var(--gold); cursor: pointer; width: auto; text-align: right;"><input type="checkbox" class="syncRadiusToggle" checked> Sync both axes</label>
+                    </div>
+                    <div class="mainRadiusContainer">
+                        <input type="range" class="orbitRadius" min="0" max="100" value="100" style="width: 100%;">
+                    </div>
+                    <div class="splitRadiusContainer" style="display: none; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color: var(--purple-light); width: auto; text-align: left;">H-Radius: <span class="orbitRadiusXVal">100</span></label>
+                            <input type="range" class="orbitRadiusX" min="0" max="100" value="100" style="width: 100%;">
+                        </div>
+                        <div>
+                            <label style="display:block; margin-bottom: 5px; font-size: 0.85em; color: var(--gold); width: auto; text-align: left;">V-Radius: <span class="orbitRadiusYVal">100</span></label>
+                            <input type="range" class="orbitRadiusY" min="0" max="100" value="100" style="width: 100%;">
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px;">
+                        <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Rotation Angle (Deg): <span class="rotationAngleVal">0</span>°</label>
+                        <input type="range" class="rotationAngle" min="-180" max="180" value="0" style="width: 100%;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #444;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label style="font-weight: bold; width: auto; text-align: left;">Orbit Speed / AM Freq (Hz)</label>
+                        <div style="display: flex; gap: 15px;">
+                            <label style="font-size: 0.85em; color: var(--gold); cursor: pointer; width: auto;">
+                                <input type="checkbox" class="syncBeatToggle"> Sync to Video
+                            </label>
+                            <label style="font-size: 0.85em; color: var(--gold); cursor: pointer; width: auto;">
+                                <input type="checkbox" class="syncAmFreqToggle" checked> Link Channels
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mainAmFreqContainer" style="margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 12px; font-size: 0.85em;">
+                            <label style="cursor: pointer;"><input type="radio" name="baseChannel" value="left" checked> Base = Left</label>
+                            <label style="cursor: pointer;"><input type="radio" name="baseChannel" value="right"> Base = Right</label>
+                        </div>
+                        <label class="baseSpeedLabel" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px; font-size: 0.85em; width: auto; color: var(--purple);">
+                            <span class="baseTextSpan">Base Speed (Left):</span> <input type="text" class="masterAmFreqText" value="1.00">
+                        </label>
+                        <input type="range" class="masterAmFreq" min="0" max="20" step="0.01" value="1" style="width: 100%; margin-bottom: 12px;">
+                        <label class="multSpeedLabel" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px; font-size: 0.85em; width: auto; color: var(--gold);">
+                            <span class="multTextSpan">Multiplier (Right):</span> <span class="masterAmFreqMultText" style="font-weight:bold;">1x</span>
+                        </label>
+                        <input type="range" class="masterAmFreqMult" min="1" max="8" step="1" value="1" style="width: 100%;">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <h4 style="color: var(--purple); margin-top: 0; margin-bottom: 10px; text-align: center;">Left Channel</h4>
+                            <div class="splitLeftAmFreq" style="display: none;">
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; color: var(--purple-light); width: auto; text-align: left;">Freq (Hz): <input type="text" class="leftAmFreqText" value="1.00"></label>
+                                <input type="range" class="leftAmFreq" min="0" max="20" value="1" step="0.01" style="width: 100%; margin-bottom: 12px;">
+                            </div>
+                            <label style="display:block; margin-bottom: 4px; font-size: 0.85em; color: var(--purple-light); width: auto; text-align: left;">AM Wave:</label>
+                            <select class="leftAmWaveform" style="width: 100%; padding: 4px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px;">
+                                <option value="sine" selected>Sine</option>
+                                <option value="square">Square</option>
+                            </select>
+                        </div>
+                        <div>
+                            <h4 style="color: var(--gold); margin-top: 0; margin-bottom: 10px; text-align: center;">Right Channel</h4>
+                            <div class="splitRightAmFreq" style="display: none;">
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; color: var(--gold); width: auto; text-align: left;">Freq (Hz): <input type="text" class="rightAmFreqText" value="1.00"></label>
+                                <input type="range" class="rightAmFreq" min="0" max="20" value="1" step="0.01" style="width: 100%; margin-bottom: 12px;">
+                            </div>
+                            <label style="display:block; margin-bottom: 4px; font-size: 0.85em; color: var(--gold); width: auto; text-align: left;">AM Wave:</label>
+                            <select class="rightAmWaveform" style="width: 100%; padding: 4px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px;">
+                                <option value="sine" selected>Sine</option>
+                                <option value="square">Square</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: auto;">
+                    <label style="display:block; margin-bottom: 10px; color: var(--muted); font-weight: bold; text-transform: uppercase; font-size: 0.85em; width: auto; text-align: left;">Advanced Settings</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button class="btnTab tabPulse" data-target="panePulse" style="padding: 10px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left;">⚡ Global Freq and Pulse (C0/P0/P1)</button>
+                        <button class="btnTab tabTremolo" data-target="paneTremolo" style="padding: 10px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left;">🌊 V0 Dual Tremolo</button>
+                        <button class="btnTab tabAuto" data-target="paneAuto" style="padding: 10px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; cursor: pointer; text-align: left;">🔄 Spatial Auto-Motion</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL -->
+            <div style="display: flex; flex-direction: column; align-items: center; width: 500px;">
+                <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px;">
+                    <h3 class="deckTitle" style="color: var(--gold); margin: 0; font-size: 1.5em;">Deck (3-Phase)</h3>
+                    <button class="btnCloseDeck" style="padding: 6px 12px; background: var(--stop-red); color: var(--cream); font-weight: bold; border: none; border-radius: 4px; cursor: pointer;">❌ Close</button>
+                </div>
+                
+                <div style="text-align: center; margin-bottom: 10px; font-size: 0.95em; color: var(--purple-light); padding: 6px; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; width: 100%;">
+                    <span style="margin-right: 15px;"><strong>L0:</strong> Alpha (X)</span>
+                    <span style="margin-right: 15px;"><strong>L1:</strong> Beta (Y)</span>
+                    <span style="color: var(--gold);"><strong>C0:</strong> FM Mix</span>
+                </div>
+                
+                <canvas class="joystickCanvas" width="400" height="400" style="border: 2px solid #555; border-radius: 8px; cursor: crosshair; background: #111;"></canvas>
+                
+                <div style="width: 100%; display: flex; gap: 10px; margin-top: 15px;">
+                    <button type="button" class="btnCenterReset" style="flex: 1; padding: 10px; font-weight: bold; cursor: pointer; background: #444; color: var(--cream); border: 1px solid #555; border-radius: 4px;">Reset to Center</button>
+                </div>
+
+                <div class="secondaryControlsArea" style="width: 100%; margin-top: 20px; background: #1a1a1a; padding: 20px; border-radius: 8px; border: 1px solid #444; min-height: 150px; box-sizing: border-box;">
+                    <div class="pane emptyState" style="text-align: center; color: var(--muted); padding-top: 25px; font-style: italic;">Select an advanced setting from the left menu.</div>
+                    
+                    <div class="pane panePulse" style="display: none;">
+                        <h4 style="color: var(--gold); margin-top: 0; margin-bottom: 15px;">⚡ Global Freq and Pulse (C0/P0/P1)</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-bottom: 15px; border-bottom: 1px solid #333;">
+                            <div>
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Pulse Freq (Hz): <span class="globalPulseFreqVal">0</span></label>
+                                <input type="range" class="globalPulseFreq" min="0" max="1000" value="0" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Pulse Width (µs): <span class="globalPulseWidthVal">0</span></label>
+                                <input type="range" class="globalPulseWidth" min="0" max="1000" value="0" style="width: 100%;">
+                            </div>
+                        </div>
+                        
+                        <div style="background: #1a1a1a; padding: 12px; border-radius: 6px; border: 1px solid #444; margin-bottom: 20px; margin-top: 15px; text-align: center;">
+                            <div style="font-size: 0.85em; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Carrier Freq (Hz)</div>
+                            <div class="carrierFreqRangeText" style="font-size: 1.3em; font-weight: bold; color: var(--purple); margin-bottom: 10px;">500 Hz</div>
+                            <div style="position: relative; width: 100%; height: 12px; background: #000; border-radius: 6px; border: 1px solid #333; overflow: hidden;">
+                                <div class="carrierFreqRangeBar" style="position: absolute; top: 0; left: 0%; width: 0%; height: 100%; background: rgba(178, 102, 255, 0.2);"></div>
+                                <div class="carrierFreqDot" style="position: absolute; top: 0; left: 0%; width: 12px; height: 12px; background: var(--purple); border-radius: 50%; transform: translateX(-50%); box-shadow: 0 0 5px var(--purple);"></div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; margin-bottom: 5px;">
+                            <label style="font-size: 0.85em; color: var(--gold); cursor: pointer; width: auto;"><input type="checkbox" class="syncFreqToggle" checked> Link L/R Freqs</label>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 15px;">
+                            <div class="leftChannel">
+                                <h5 style="color: var(--purple); margin-top: 0; margin-bottom: 10px;">Left Frequency</h5>
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; width: auto;">Freq (Hz): <input type="text" class="leftFreqText" value="600"></label>
+                                <input type="range" class="leftFreq" min="500" max="3000" value="600" style="width: 100%; margin-bottom: 12px;">
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; width: auto;">FM Depth (Hz): <input type="text" class="leftFmDepthText" value="0"></label>
+                                <input type="range" class="leftFmDepth" min="0" max="500" value="0" style="width: 100%; margin-bottom: 12px;">
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; width: auto;">FM Freq (Hz): <input type="text" class="leftFmFreqText" value="1.00"></label>
+                                <input type="range" class="leftFmFreq" min="0" max="1500" value="1" step="0.01" style="width: 100%; margin-bottom: 12px;">
+                            </div>
+                            <div class="rightChannel">
+                                <h5 style="color: var(--gold); margin-top: 0; margin-bottom: 10px;">Right Frequency</h5>
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; width: auto;">Freq (Hz): <input type="text" class="rightFreqText" value="600"></label>
+                                <input type="range" class="rightFreq" min="500" max="3000" value="600" style="width: 100%; margin-bottom: 12px;">
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; width: auto;">FM Depth (Hz): <input type="text" class="rightFmDepthText" value="0"></label>
+                                <input type="range" class="rightFmDepth" min="0" max="500" value="0" style="width: 100%; margin-bottom: 12px;">
+                                <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px; font-size: 0.85em; width: auto;">FM Freq (Hz): <input type="text" class="rightFmFreqText" value="1.00"></label>
+                                <input type="range" class="rightFmFreq" min="0" max="1500" value="1" step="0.01" style="width: 100%; margin-bottom: 12px;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pane paneTremolo" style="display: none;">
+                        <h4 style="color: var(--purple); margin-top: 0; margin-bottom: 15px;">🌊 V0 Dual Tremolo</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Alpha Depth (%): <span class="leftTremDepthVal">0</span></label>
+                                <input type="range" class="leftTremDepth" min="0" max="100" value="0" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Alpha Freq (Hz): <span class="leftTremFreqVal">1.00</span></label>
+                                <input type="range" class="leftTremFreq" min="0.01" max="40" step="0.01" value="1" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Beta Depth (%): <span class="rightTremDepthVal">0</span></label>
+                                <input type="range" class="rightTremDepth" min="0" max="100" value="0" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Beta Freq (Hz): <span class="rightTremFreqVal">1.00</span></label>
+                                <input type="range" class="rightTremFreq" min="0.01" max="40" step="0.01" value="1" style="width: 100%;">
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333; text-align: center;">
+                            <label style="margin-right: 15px; font-size: 0.9em; width: auto;">Mix Method:</label>
+                            <label style="margin-right: 15px; font-size: 0.9em; width: auto;"><input type="radio" name="tremoloMix" value="average" checked> Average</label>
+                            <label style="font-size: 0.9em; width: auto;"><input type="radio" name="tremoloMix" value="multiply"> Multiply</label>
+                        </div>
+                    </div>
+
+                    <div class="pane paneAuto" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="color: var(--gold); margin: 0;">🔄 Spatial Auto-Motion</h4>
+                            <div style="background: #333; padding: 4px 8px; border-radius: 4px; font-size: 0.85em;">
+                                <label style="margin-right: 10px; cursor: pointer; width: auto;"><input type="radio" name="spatialMode" class="modeManual" checked> Manual</label>
+                                <label style="cursor: pointer; width: auto;"><input type="radio" name="spatialMode" class="modeAuto"> Auto (Anchor)</label>
+                            </div>
+                        </div>
+                        <div style="padding-bottom: 15px; margin-bottom: 15px; border-bottom: 1px solid #333;">
+                            <label style="display:block; margin-bottom: 5px; color: var(--purple-light); width: auto; text-align: left;">Power Dot Motion:</label>
+                            <select class="powerMotionType" style="width: 100%; padding: 4px; background: #222; color: var(--cream); border: 1px solid #555; border-radius: 4px; margin-bottom: 10px;">
+                                <option value="orbit">Continuous Orbit (Uses L/R AM)</option>
+                                <option value="pendulum">Pendulum Sweep</option>
+                            </select>
+                            <div class="powerPendulumExtras" style="display: none; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div style="grid-column: span 2;">
+                                    <label style="display:block; margin-bottom: 5px; color:var(--cream); width: auto; text-align: left;">Sweep Speed (Hz): <span class="powerSweepSpeedVal">0.5</span></label>
+                                    <input type="range" class="powerSweepSpeed" min="0.01" max="10" step="0.01" value="0.5" style="width: 100%;">
+                                </div>
+                                <div>
+                                    <label style="display:block; margin-bottom: 5px; color:var(--gold); width: auto; text-align: left;">Sweep Arc (°): <span class="powerSweepArcVal">360</span></label>
+                                    <input type="range" class="powerSweepArc" min="0" max="360" value="360" style="width: 100%;">
+                                </div>
+                                <div>
+                                    <label style="display:block; margin-bottom: 5px; color:var(--purple); width: auto; text-align: left;">End Pause (ms): <span class="powerEndPauseVal">0</span></label>
+                                    <input type="range" class="powerEndPause" min="0" max="2000" step="50" value="0" style="width: 100%;">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="autoSpatialControls" style="display: none; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Origin X: <span class="autoOriginXVal">50%</span></label>
+                                <input type="range" class="autoOriginX" min="0" max="1" step="0.01" value="0.5" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Origin Y: <span class="autoOriginYVal">50%</span></label>
+                                <input type="range" class="autoOriginY" min="0" max="1" step="0.01" value="0.5" style="width: 100%;">
+                            </div>
+                            <div>
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Drift Radius: <span class="autoRadiusVal">50%</span></label>
+                                <input type="range" class="autoRadius" min="0" max="1" step="0.01" value="0.5" style="width: 100%; margin-bottom: 15px;">
+                                <label style="display:block; margin-bottom: 5px; width: auto; text-align: left;">Drift Speed (Hz): <input type="text" class="autoSpeedText" value="0.20" style="width: 45px; display: inline-block; background: #111; color: var(--cream); border: 1px solid #555; border-radius: 4px; text-align: center; padding: 2px;"></label>
+                                <input type="range" class="autoSpeed" min="-10" max="10" step="0.01" value="0.2" style="width: 100%;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- UI Core Logic (Pre-JS Engine hooks) -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+			
+			// --- GLOBAL MASTER RECORDER STATE ---
+            window.isRecordingSession = false;
+            window.sessionStartTime = 0;
+            window.sessionData = [];
+
+            const btnRecord = document.getElementById('btnMasterRecord');
+            const statusTxt = document.getElementById('recordStatus');
+            
+            if (btnRecord) {
+                btnRecord.addEventListener('click', () => {
+                    window.isRecordingSession = !window.isRecordingSession;
+                    
+                    if (window.isRecordingSession) {
+                        window.sessionData = [];
+                        window.sessionStartTime = performance.now();
+                        btnRecord.innerHTML = '⏹ Stop & Save Recording';
+                        btnRecord.style.background = 'var(--stop-red)';
+                        btnRecord.style.color = '#fff';
+                        if (statusTxt) statusTxt.innerText = 'Recording live T-Code streams...';
+                    } else {
+                        btnRecord.innerHTML = '▶ Start Master Recording';
+                        btnRecord.style.background = 'var(--start-green)';
+                        btnRecord.style.color = '#000';
+                        if (statusTxt) statusTxt.innerText = `Session saved with ${window.sessionData.length} data frames.`;
+                        
+                        if (window.sessionData.length > 0) {
+                            const dataStr = JSON.stringify(window.sessionData, null, 2);
+                            const blob = new Blob([dataStr], { type: "application/json" });
+                            const url = URL.createObjectURL(blob);
+                            
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `restim_session_${new Date().getTime()}.json`;
+                            document.body.appendChild(a);
+                            a.click();
+                            
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                        }
+                    }
+                });
+            }
+			
+            const container = document.getElementById('decksContainer');
+            const btn4Phase = document.getElementById('btnAdd4Phase');
+            const btn3Phase = document.getElementById('btnAdd3Phase');
+            const tpl4Phase = document.getElementById('deckTemplate4Phase');
+            const tpl3Phase = document.getElementById('deckTemplate3Phase');
+            
+            let deckCount = 0;
+            const basePort = 12349;
+
+            function spawnDeck(type) {
+                const letter = String.fromCharCode(65 + deckCount); // A, B, C...
+                const deckId = 'deck' + letter;
+                const port = basePort + deckCount;
+                
+                const template = type === '4phase' ? tpl4Phase : tpl3Phase;
+                const clone = template.content.cloneNode(true);
+                
+                const deckDiv = clone.querySelector('.deck');
+                deckDiv.id = deckId;
+                
+                const title = clone.querySelector('.deckTitle');
+                if (title) title.innerText = `Deck ${letter} (${type === '4phase' ? '4-Phase' : '3-Phase'})`;
+                
+                const wsAddress = clone.querySelector('.wsAddress');
+                if (wsAddress) wsAddress.value = `ws://127.0.0.1:${port}`;
+                
+                const closeBtn = clone.querySelector('.btnCloseDeck');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', (e) => {
+                        const deckToRemove = e.target.closest('.deck');
+                        if (deckToRemove) deckToRemove.remove();
+                    });
+                }
+
+                container.appendChild(clone);
+                
+                // --- Step 2 Hooks ---
+                if (type === '4phase' && window.SpatialSequencer) {
+                    new window.SpatialSequencer(deckId, `ws://127.0.0.1:${port}`);
+                } else if (type === '3phase' && window.ThreePhaseSequencer) {
+                    new window.ThreePhaseSequencer(deckId, `ws://127.0.0.1:${port}`);
+                }
+                
+                deckCount++;
+            }
+
+            btn4Phase.addEventListener('click', () => spawnDeck('4phase'));
+            btn3Phase.addEventListener('click', () => spawnDeck('3phase'));
+			
+			// --- PRESET & SESSION MANAGER LOGIC ---
+            const btnSaveLayout = document.getElementById('btnSaveLayout');
+            const btnLoadLayout = document.getElementById('btnLoadLayout');
+            const btnSaveToBank = document.getElementById('btnSaveToBank');
+            const presetList = document.getElementById('presetList');
+
+            const targetSelectors = 'input[type="range"], input[type="text"], input[type="checkbox"], select, input[type="radio"]:checked';
+
+            // Core Engine: Scrape board to JSON
+            function getCurrentLayout() {
+                const layoutData = { decks: [] };
+                document.querySelectorAll('.deck').forEach(deck => {
+                    const deckType = deck.classList.contains('deck-4phase') ? '4phase' : '3phase';
+                    const controls = {};
+
+                    deck.querySelectorAll(targetSelectors).forEach(input => {
+                        const keyClass = input.classList.length > 0 ? input.classList[0] : null;
+                        if (keyClass) {
+                            if (input.type === 'checkbox') controls[keyClass] = input.checked;
+                            else controls[keyClass] = input.value;
+                        }
+                    });
+                    layoutData.decks.push({ type: deckType, state: controls });
+                });
+                return layoutData;
+            }
+
+            // Core Engine: Inject JSON to board
+            function applyLayout(layoutData) {
+                document.querySelectorAll('.deck').forEach(d => d.remove());
+                deckCount = 0; 
+
+                layoutData.decks.forEach(savedDeck => {
+                    spawnDeck(savedDeck.type);
+                    const newDeck = container.lastElementChild;
+                    
+                    for (const [keyClass, savedValue] of Object.entries(savedDeck.state)) {
+                        const inputs = newDeck.querySelectorAll(`.${keyClass}`);
+                        inputs.forEach(input => {
+                            if (input.type === 'checkbox') {
+                                input.checked = savedValue;
+                            } else if (input.type === 'radio') {
+                                if (input.value === savedValue) input.checked = true;
+                            } else {
+                                input.value = savedValue;
+                            }
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                            input.dispatchEvent(new Event('change', { bubbles: true }));
+                        });
+                    }
+                });
+            }
+			
+			// Core Engine: Smoothly interpolate a specific deck to a target state
+            function transitionDeck(deck, targetState, durationMs) {
+                const startTime = performance.now();
+                const numericInputs = [];
+                const binaryInputs = [];
+
+                // 1. Sort inputs into Numeric (sliders) vs Binary (checkboxes/selects)
+                for (const [keyClass, targetValue] of Object.entries(targetState)) {
+				
+					// Add this line to skip connection fields during live fades:
+                    if (keyClass.startsWith('ws')) continue;
+					
+                    const inputs = deck.querySelectorAll(`.${keyClass}`);
+                    
+                    inputs.forEach(input => {
+                        if (input.type === 'checkbox' || input.type === 'radio' || input.tagName === 'SELECT') {
+                            binaryInputs.push({ input, targetValue });
+                        } else {
+                            // Numeric inputs (range, text)
+                            const startVal = parseFloat(input.value) || 0;
+                            const endVal = parseFloat(targetValue) || 0;
+                            // Determine formatting precision based on HTML step attribute
+                            const decimals = (input.step && input.step.includes('.')) ? input.step.split('.')[1].length : (input.type === 'text' ? 2 : 0);
+                            numericInputs.push({ input, startVal, endVal, decimals });
+                        }
+                    });
+                }
+
+                // 2. The Animation Loop (60 FPS)
+                function step(currentTime) {
+                    let progress = (currentTime - startTime) / durationMs;
+                    if (progress > 1) progress = 1;
+
+                    // Update all numeric sliders
+                    numericInputs.forEach(item => {
+                        const currentVal = item.startVal + (item.endVal - item.startVal) * progress;
+                        item.input.value = currentVal.toFixed(item.decimals);
+                        
+                        // Fire input event so the hardware engine catches the new value instantly
+                        item.input.dispatchEvent(new Event('input', { bubbles: true }));
+                    });
+
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        // 3. The End (Option B) - Snap binary inputs
+                        binaryInputs.forEach(item => {
+                            if (item.input.type === 'checkbox') {
+                                item.input.checked = item.targetValue;
+                            } else if (item.input.type === 'radio') {
+                                if (item.input.value === item.targetValue) item.input.checked = true;
+                            } else {
+                                item.input.value = item.targetValue;
+                            }
+                            item.input.dispatchEvent(new Event('change', { bubbles: true }));
+                        });
+                        console.log(`Transition on deck complete.`);
+                    }
+                }
+
+                requestAnimationFrame(step);
+            }
+
+            // --- File I/O ---
+            btnSaveLayout.addEventListener('click', () => {
+                const dataStr = JSON.stringify(getCurrentLayout(), null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `deck_layout_${new Date().getTime()}.json`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            btnLoadLayout.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try { applyLayout(JSON.parse(event.target.result)); e.target.value = ''; } 
+                    catch (err) { alert("Invalid layout file."); console.error(err); }
+                };
+                reader.readAsText(file);
+            });
+
+            // --- Local Preset Bank ---
+            let localBank = JSON.parse(localStorage.getItem('restim_presets')) || [];
+
+            function renderBank() {
+                presetList.innerHTML = '';
+                if (localBank.length === 0) {
+                    presetList.innerHTML = '<div style="color: var(--muted); font-style: italic; font-size: 0.9em;">No presets saved yet.</div>';
+                    return;
+                }
+
+                localBank.forEach((preset, index) => {
+                    const block = document.createElement('div');
+                    block.style.cssText = 'display: flex; flex-direction: column; gap: 5px; background: #222; padding: 10px; border: 1px solid #444; border-radius: 6px; min-width: 150px; cursor: grab;';
+                    
+                    // Add HTML5 Drag Support
+                    block.draggable = true;
+                    block.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', preset.name);
+                        e.dataTransfer.effectAllowed = 'copy';
+                    });
+                    
+                    const title = document.createElement('strong');
+                    title.innerText = preset.name;
+                    title.style.color = 'var(--gold)';
+                    title.style.fontSize = '0.9em';
+                    
+                    const btnContainer = document.createElement('div');
+                    btnContainer.style.cssText = 'display: flex; gap: 5px; margin-top: 5px;';
+
+                    const btnLoad = document.createElement('button');
+                    btnLoad.innerText = '▶ Load';
+                    btnLoad.style.cssText = 'flex: 1; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; padding: 4px; cursor: pointer; font-size: 0.85em; transition: 0.2s;';
+                    btnLoad.onclick = () => applyLayout(preset.layout);
+
+                    const btnFade = document.createElement('button');
+                    btnFade.innerText = '🌊 Fade (3s)';
+                    btnFade.style.cssText = 'flex: 1; background: #333; color: var(--gold); border: 1px solid #555; border-radius: 4px; padding: 4px; cursor: pointer; font-size: 0.85em; transition: 0.2s;';
+                    btnFade.onclick = () => {
+                        const activeDecks = document.querySelectorAll('.deck');
+                        if (activeDecks.length === 0) {
+                            applyLayout(preset.layout); // Hard load if the board is empty
+                            return;
+                        }
+                        
+                        // Attempt to map the saved decks to the current active decks
+                        preset.layout.decks.forEach((savedDeck, index) => {
+                            const targetActiveDeck = activeDecks[index];
+                            if (targetActiveDeck) {
+                                const currentType = targetActiveDeck.classList.contains('deck-4phase') ? '4phase' : '3phase';
+                                if (currentType === savedDeck.type) {
+                                    transitionDeck(targetActiveDeck, savedDeck.state, 3000); // 3000ms = 3 seconds
+                                } else {
+                                    console.warn(`Deck mismatch at index ${index}. Expected ${savedDeck.type}, got ${currentType}. Skipping fade.`);
+                                }
+                            }
+                        });
+                    };
+
+                    const btnDel = document.createElement('button');
+                    btnDel.innerText = '❌';
+                    btnDel.title = 'Delete Preset';
+                    btnDel.style.cssText = 'background: transparent; color: var(--stop-red); border: none; font-size: 0.9em; cursor: pointer; padding: 4px;';
+                    btnDel.onclick = () => {
+                        localBank.splice(index, 1);
+                        localStorage.setItem('restim_presets', JSON.stringify(localBank));
+                        renderBank();
+                    };
+
+                    btnContainer.appendChild(btnLoad);
+                    btnContainer.appendChild(btnFade);
+                    btnContainer.appendChild(btnDel);
+
+                    block.appendChild(title);
+                    block.appendChild(btnContainer);
+                    presetList.appendChild(block);
+                });
+            }
+
+            btnSaveToBank.addEventListener('click', () => {
+                const name = prompt("Enter a name for this preset:", `Preset ${localBank.length + 1}`);
+                if (!name) return; // User canceled
+                
+                localBank.push({
+                    name: name,
+                    layout: getCurrentLayout()
+                });
+                
+                localStorage.setItem('restim_presets', JSON.stringify(localBank));
+                renderBank();
+            });
+			
+			// --- Export / Import Local Bank ---
+            const btnExportBank = document.getElementById('btnExportBank');
+            const btnImportBank = document.getElementById('btnImportBank');
+
+            if (btnExportBank) {
+                btnExportBank.addEventListener('click', () => {
+                    if (localBank.length === 0) {
+                        alert("The preset bank is empty!");
+                        return;
+                    }
+                    const dataStr = JSON.stringify(localBank, null, 2);
+                    const blob = new Blob([dataStr], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `preset_bank_${new Date().getTime()}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+            }
+
+            if (btnImportBank) {
+                btnImportBank.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const importedBank = JSON.parse(event.target.result);
+                            if (Array.isArray(importedBank)) {
+                                // Ask the user if they want to overwrite or merge
+                                if (confirm("Do you want to REPLACE your current bank? (Click 'Cancel' to APPEND these presets instead)")) {
+                                    localBank = importedBank;
+                                } else {
+                                    localBank = localBank.concat(importedBank);
+                                }
+                                
+                                localStorage.setItem('restim_presets', JSON.stringify(localBank));
+                                renderBank();
+                            }
+                        } catch (err) {
+                            alert("Invalid preset bank file.");
+                            console.error(err);
+                        }
+                        e.target.value = ''; // Reset input so you can re-import the same file if needed
+                    };
+                    reader.readAsText(file);
+                });
+            }
+
+            // Initial render on page load
+            renderBank();
+			
+			// ==========================================
+            // --- STEP 3: DAW SEQUENCER & TIMELINE ---
+            // ==========================================
+
+            // 1. The Sequence Data Structure (Now starts empty)
+            let sequenceEvents = [];
+
+            let isSequencerActive = true; // Master switch for automation
+            let lastVideoTime = 0;
+
+            // 2. The Automation Engine
+            function triggerSequenceEvent(eventData) {
+                console.log(`🎬 Sequencer Triggered: '${eventData.presetName}' at ${eventData.time}s`);
+                
+                const preset = localBank.find(p => p.name === eventData.presetName);
+                if (!preset) {
+                    console.warn(`Sequencer Error: Preset '${eventData.presetName}' not found in local bank!`);
+                    return;
+                }
+                
+                const activeDecks = document.querySelectorAll('.deck');
+                
+                // Only do a hard wipe/rebuild if the board is completely empty
+                if (activeDecks.length === 0) {
+                    applyLayout(preset.layout);
+                    return;
+                } 
+                
+                // Otherwise, use the transition engine (even for 0ms hard cuts) to keep the deck running
+                preset.layout.decks.forEach((savedDeck, index) => {
+                    const targetActiveDeck = activeDecks[index];
+                    if (targetActiveDeck) {
+                        const currentType = targetActiveDeck.classList.contains('deck-4phase') ? '4phase' : '3phase';
+                        if (currentType === savedDeck.type) {
+                            // Use Math.max(16, duration) so a 0ms fade just completes instantly in 1 frame (16ms)
+                            transitionDeck(targetActiveDeck, savedDeck.state, Math.max(16, eventData.fadeDuration));
+                        }
+                    }
+                });
+            }
+
+            // 3. Timeline UI & Playhead Monitor
+            const videoElement = document.getElementById('beatVideo'); 
+            const timelineTrack = document.getElementById('timelineTrack');
+            const eventsContainer = document.getElementById('timelineEventsContainer');
+            const playhead = document.getElementById('timelinePlayhead');
+            const timeDisplay = document.getElementById('timeDisplay');
+            const durationDisplay = document.getElementById('durationDisplay');
+			const timelineZoom = document.getElementById('timelineZoom');
+            const timelineViewport = document.getElementById('timelineViewport');
+			
+			// Apply zoom level by stretching the track width
+            const timelineScrollArea = document.getElementById('timelineScrollArea');
+            const timelineRuler = document.getElementById('timelineRuler');
+
+            function renderRuler() {
+                if (!timelineRuler || videoDuration === 0) return;
+                timelineRuler.innerHTML = ''; // Clear old ticks
+                
+                // Determine a clean grid interval based on physical pixel width
+                const rect = timelineScrollArea.getBoundingClientRect();
+                const pxPerSec = rect.width / videoDuration;
+                const targetSecs = 100 / pxPerSec; // Aim for ~100px between labels
+                
+                // Standard time intervals (1s, 5s, 10s, 30s, 1m, 2m, 5m, 10m)
+                const niceIntervals = [1, 5, 10, 30, 60, 120, 300, 600];
+                let interval = niceIntervals.find(i => i >= targetSecs) || 600;
+
+                for (let t = 0; t <= videoDuration; t += interval) {
+                    const pct = (t / videoDuration) * 100;
+                    const tick = document.createElement('div');
+                    
+                    // Format as mm:ss or just seconds
+                    const mins = Math.floor(t / 60);
+                    const secs = Math.floor(t % 60);
+                    const timeStr = mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s`;
+                    
+                    tick.style.cssText = `
+                        position: absolute; left: ${pct}%; bottom: 0; height: 100%;
+                        border-left: 1px solid #555; padding-left: 4px; padding-top: 2px;
+                    `;
+                    tick.innerText = timeStr;
+                    timelineRuler.appendChild(tick);
+                }
+            }
+
+            function updateZoom() {
+                if (!timelineZoom || !timelineScrollArea) return;
+                const zoomFactor = parseFloat(timelineZoom.value);
+                // Stretch the wrapper instead of just the track so the ruler matches
+                timelineScrollArea.style.width = `${zoomFactor * 100}%`;
+                renderRuler();
+            }
+
+            if (timelineZoom) {
+                timelineZoom.addEventListener('input', updateZoom);
+            }
+
+            // Allow Shift + Wheel inside the track to zoom
+            if (timelineViewport) {
+                timelineViewport.addEventListener('wheel', (e) => {
+                    if (e.shiftKey) {
+                        e.preventDefault(); // Stop standard scrolling
+                        let currentZoom = parseFloat(timelineZoom.value);
+                        // Increase or decrease zoom by 2x steps
+                        if (e.deltaY < 0) currentZoom = Math.min(100, currentZoom + 2);
+                        else currentZoom = Math.max(1, currentZoom - 2);
+                        
+                        timelineZoom.value = currentZoom;
+                        updateZoom();
+                    }
+                });
+            }
+			
+			// --- Timeline File I/O ---
+            const btnSaveSequence = document.getElementById('btnSaveSequence');
+            const btnLoadSequence = document.getElementById('btnLoadSequence');
+
+            if (btnSaveSequence) {
+                btnSaveSequence.addEventListener('click', () => {
+                    if (sequenceEvents.length === 0) {
+                        alert("The timeline is empty!");
+                        return;
+                    }
+                    const dataStr = JSON.stringify(sequenceEvents, null, 2);
+                    const blob = new Blob([dataStr], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; 
+                    a.download = `sequence_track_${new Date().getTime()}.json`;
+                    document.body.appendChild(a); 
+                    a.click(); 
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+            }
+
+            if (btnLoadSequence) {
+                btnLoadSequence.addEventListener('change', (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try { 
+                            const loadedSequence = JSON.parse(event.target.result);
+                            if (Array.isArray(loadedSequence)) {
+                                sequenceEvents = loadedSequence;
+                                sequenceEvents.forEach(ev => ev.fired = false); // Reset trigger states
+                                sequenceEvents.sort((a, b) => a.time - b.time);
+                                renderTimeline();
+                            }
+                        } catch (err) { 
+                            alert("Invalid sequence track file."); 
+                            console.error(err); 
+                        }
+                        e.target.value = ''; // Reset input so the same file can be reloaded if needed
+                    };
+                    reader.readAsText(file);
+                });
+            }
+			
+			// --- Timeline Drag and Drop Target ---
+            if (timelineTrack) {
+                // Allow the track to receive dropped elements
+                timelineTrack.addEventListener('dragover', (e) => {
+                    e.preventDefault(); 
+                    e.dataTransfer.dropEffect = 'copy';
+                });
+
+                // Handle the drop event
+                timelineTrack.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    if (videoDuration === 0) {
+                        alert("Please load and wait for a video to initialize before adding sequence events.");
+                        return;
+                    }
+
+                    const presetName = e.dataTransfer.getData('text/plain');
+                    if (!presetName) return;
+
+                    // Calculate drop time based on mouse X position and current zoom
+                    const trackRect = timelineTrack.getBoundingClientRect();
+                    const dropX = e.clientX - trackRect.left;
+                    const dropTime = (dropX / trackRect.width) * videoDuration;
+
+                    // Push the new event (Defaults to a 3-second fade)
+                    sequenceEvents.push({
+                        time: dropTime,
+                        presetName: presetName,
+                        fadeDuration: 3000, 
+                        fired: false
+                    });
+
+                    // Keep chronological order and redraw
+                    sequenceEvents.sort((a, b) => a.time - b.time);
+                    renderTimeline();
+                });
+            }
+
+            let videoDuration = 0;
+
+            // Render the sequence blocks on the timeline
+            function renderTimeline() {
+                if (!eventsContainer || videoDuration === 0) return;
+                eventsContainer.innerHTML = ''; // Clear old blocks
+
+                sequenceEvents.forEach((ev, index) => {
+                    const leftPct = (ev.time / videoDuration) * 100;
+                    const widthPct = ev.fadeDuration > 0 ? (ev.fadeDuration / 1000 / videoDuration) * 100 : 2;
+
+                    const block = document.createElement('div');
+                    block.style.cssText = `
+                        position: absolute; 
+                        top: 10px; 
+                        left: ${leftPct}%; 
+                        width: ${widthPct}%; 
+                        height: 40px; 
+                        background: rgba(178, 102, 255, 0.4); 
+                        border: 1px solid var(--purple); 
+                        border-radius: 4px;
+                        color: var(--cream);
+                        font-size: 0.75em;
+                        box-sizing: border-box;
+                        overflow: hidden;
+                        white-space: nowrap;
+                        cursor: grab;
+                        user-select: none;
+                    `;
+
+                    // Inner text container
+                    const content = document.createElement('div');
+                    content.style.cssText = 'padding: 4px; pointer-events: none;';
+                    content.innerHTML = `<strong>${ev.presetName}</strong><br>${ev.fadeDuration > 0 ? (ev.fadeDuration/1000).toFixed(1)+'s fade' : 'Snap'}`;
+
+                    // Resize handle on the right edge
+                    const resizeHandle = document.createElement('div');
+                    resizeHandle.className = 'resize-handle';
+                    resizeHandle.style.cssText = `
+                        position: absolute; right: 0; top: 0; width: 8px; height: 100%;
+                        background: rgba(255, 255, 255, 0.2); cursor: ew-resize;
+                    `;
+
+                    block.appendChild(content);
+                    block.appendChild(resizeHandle);
+                    eventsContainer.appendChild(block);
+					
+					// Right-click to delete from timeline
+                    block.addEventListener('contextmenu', (e) => {
+                        e.preventDefault(); // Stop the browser's standard right-click menu from appearing
+                        e.stopPropagation();
+                        
+                        const index = sequenceEvents.indexOf(ev);
+                        if (index > -1) {
+                            sequenceEvents.splice(index, 1);
+                            renderTimeline();
+                        }
+                    });
+
+                    // --- Drag and Drop Logic ---
+                    block.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                        const isResizing = e.target.classList.contains('resize-handle');
+                        const startX = e.clientX;
+                        const originalTime = ev.time;
+                        const originalFade = ev.fadeDuration;
+                        const trackWidth = timelineTrack.getBoundingClientRect().width;
+
+                        // 1. Sort and find adjacent blocks for collision detection
+                        sequenceEvents.sort((a, b) => a.time - b.time);
+                        const currentIndex = sequenceEvents.indexOf(ev);
+                        const prevEv = sequenceEvents[currentIndex - 1];
+                        const nextEv = sequenceEvents[currentIndex + 1];
+
+                        // Calculate hard boundaries
+                        const minTime = prevEv ? prevEv.time + (prevEv.fadeDuration / 1000) : 0;
+                        const maxTime = nextEv ? nextEv.time : videoDuration;
+                        const snapThreshold = 0.5 * (videoDuration / (trackWidth / 100)); // Dynamic snap distance based on zoom
+
+                        function onMouseMove(moveEvent) {
+                            const deltaX = moveEvent.clientX - startX;
+                            const deltaSec = (deltaX / trackWidth) * videoDuration;
+
+                            if (isResizing) {
+                                let newFadeSec = (originalFade / 1000) + deltaSec;
+                                
+                                // Snap to next block's edge
+                                if (nextEv && Math.abs((ev.time + newFadeSec) - maxTime) < snapThreshold) {
+                                    newFadeSec = maxTime - ev.time;
+                                }
+                                // Clamp to prevent overlapping into the next block
+                                if (nextEv && (ev.time + newFadeSec) > maxTime) {
+                                    newFadeSec = maxTime - ev.time;
+                                }
+                                ev.fadeDuration = Math.max(0, newFadeSec * 1000);
+                            } else {
+                                let newTime = originalTime + deltaSec;
+                                const myWidthSec = ev.fadeDuration / 1000;
+
+                                // Snap to previous block's end edge
+                                if (Math.abs(newTime - minTime) < snapThreshold) {
+                                    newTime = minTime;
+                                }
+                                // Snap to next block's start edge
+                                if (nextEv && Math.abs((newTime + myWidthSec) - maxTime) < snapThreshold) {
+                                    newTime = maxTime - myWidthSec;
+                                }
+                                
+                                // Hard clamp to prevent overlapping adjacent blocks
+                                if (newTime < minTime) newTime = minTime;
+                                if (nextEv && (newTime + myWidthSec) > maxTime) newTime = maxTime - myWidthSec;
+
+                                ev.time = Math.max(0, newTime);
+                                ev.fired = false;
+                            }
+
+                            // Visual update
+                            const newLeft = (ev.time / videoDuration) * 100;
+                            const newWidth = ev.fadeDuration > 0 ? (ev.fadeDuration / 1000 / videoDuration) * 100 : 2;
+                            block.style.left = `${newLeft}%`;
+                            block.style.width = `${newWidth}%`;
+                            content.innerHTML = `<strong>${ev.presetName}</strong><br>${ev.fadeDuration > 0 ? (ev.fadeDuration/1000).toFixed(1)+'s fade' : 'Snap'}`;
+                        }
+
+                        function onMouseUp() {
+                            document.removeEventListener('mousemove', onMouseMove);
+                            document.removeEventListener('mouseup', onMouseUp);
+                            sequenceEvents.sort((a, b) => a.time - b.time);
+                            renderTimeline();
+                        }
+
+                        document.addEventListener('mousemove', onMouseMove);
+                        document.addEventListener('mouseup', onMouseUp);
+                    });
+					
+                });
+            }
+
+            if (videoElement) {
+                // When video loads, get total duration and draw the blocks
+                videoElement.addEventListener('loadedmetadata', () => {
+                    videoDuration = videoElement.duration;
+                    if (durationDisplay) durationDisplay.innerText = videoDuration.toFixed(2);
+                    renderTimeline();
+					renderRuler(); // Draw the time markings
+                });
+
+                videoElement.addEventListener('timeupdate', () => {
+                    if (!isSequencerActive) return;
+                    
+                    const currentTime = videoElement.currentTime;
+                    
+                    // Update UI text and playhead position
+                    if (timeDisplay) timeDisplay.innerText = currentTime.toFixed(2);
+                    if (videoDuration > 0 && playhead) {
+                        const playheadPct = (currentTime / videoDuration) * 100;
+                        playhead.style.left = `${playheadPct}%`;
+                    }
+                    
+                    if (currentTime < lastVideoTime - 1) {
+                        sequenceEvents.forEach(ev => ev.fired = false);
+                        console.log("Rewind detected. Sequencer events reset.");
+                    }
+                    
+                    sequenceEvents.forEach(ev => {
+                        if (!ev.fired && currentTime >= ev.time && currentTime < ev.time + 1) {
+                            ev.fired = true; 
+                            triggerSequenceEvent(ev);
+                        }
+                    });
+                    
+                    lastVideoTime = currentTime;
+                });
+            } else {
+                console.warn("Sequencer: video element 'beatVideo' not found.");
+            }
+			
+        });
+		
+		// --- GLOBAL SLIDER SCROLL INTERCEPTOR ---
+        // Applies mouse-wheel scrolling to every slider on the page automatically
+        document.addEventListener('wheel', (e) => {
+            // Only intercept if hovering directly over a range slider
+            if (e.target.tagName === 'INPUT' && e.target.type === 'range') {
+                e.preventDefault(); // Stop the whole page from scrolling
+
+                const slider = e.target;
+                const step = parseFloat(slider.step) || 1;
+                const min = parseFloat(slider.min) || 0;
+                const max = parseFloat(slider.max) || 100;
+                let val = parseFloat(slider.value);
+
+                // Scroll up (negative delta) increases value, scroll down decreases
+                if (e.deltaY < 0) {
+                    val = Math.min(max, val + step);
+                } else {
+                    val = Math.max(min, val - step);
+                }
+
+                // Preserve exact decimal precision based on the slider's 'step' attribute
+                const decimals = (slider.step && slider.step.includes('.')) ? slider.step.split('.')[1].length : 0;
+                slider.value = val.toFixed(decimals);
+
+                // Force the app to recognize the change instantly
+                slider.dispatchEvent(new Event('input'));
+            }
+        }, { passive: false }); // passive: false is required to allow preventDefault()
+		
+    </script>
+    
+    <script type="module" src="js/fourphase_stream.js"></script>
+    <script type="module" src="js/threephase_stream.js"></script>
+    <script src="js/video_beat_sync.js"></script>
+</body>
+</html>

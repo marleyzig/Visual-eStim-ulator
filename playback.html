@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Session Playback Engine</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        :root {
+            --bg: #0b0b0b;
+            --panel: #1b1b1b;
+            --muted: #777;
+            --purple: #b266ff;
+            --purple-light: #d9b3ff;
+            --gold: #ffca28;
+            --cream: #fdf5e6;
+            --start-green: #0f9;
+            --stop-red: #f55;
+        }
+
+        body { font-family: sans-serif; background: var(--bg); color: var(--cream); margin: 0; padding: 40px; display: flex; flex-direction: column; align-items: center; }
+        .panel { background: var(--panel); padding: 25px; border-radius: 8px; border: 1px solid #444; width: 100%; max-width: 600px; margin-bottom: 20px; }
+        h1 { color: var(--purple); margin-top: 0; text-align: center; }
+        h3 { color: var(--purple-light); margin-top: 0; }
+        
+        input[type="file"] { display: block; margin-bottom: 15px; padding: 10px; background: #222; color: var(--cream); border: 1px solid #555; border-radius: 4px; width: 100%; box-sizing: border-box; cursor: pointer; }
+        input[type="text"] { padding: 8px; background: #333; color: var(--cream); border: 1px solid #555; border-radius: 4px; }
+        button { padding: 8px 16px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; transition: filter 0.2s; }
+        button:hover { filter: brightness(1.2); }
+        
+        .conn-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 10px; background: #111; border: 1px solid #333; border-radius: 6px; }
+        .conn-row input { flex: 1; }
+        
+        #playbackControls { display: none; text-align: center; }
+        .progress-bar-bg { width: 100%; height: 12px; background: #222; border-radius: 6px; overflow: hidden; margin: 15px 0; border: 1px solid #444; }
+        .progress-bar-fill { width: 0%; height: 100%; background: var(--purple); }
+    </style>
+</head>
+<body>
+
+    <h1>Session Playback Engine</h1>
+
+    <!-- File Loader -->
+    <div class="panel">
+        <h3>1. Load Session File</h3>
+        <input type="file" id="jsonLoader" accept=".json">
+        <div id="fileInfo" style="color: var(--muted); font-size: 0.9em; font-style: italic;">No file loaded.</div>
+    </div>
+
+    <!-- Dynamic Connections Panel -->
+    <div class="panel" id="connectionsPanel" style="display: none;">
+        <h3>2. Connect to Hardware</h3>
+        <p style="color: var(--muted); font-size: 0.9em; margin-bottom: 15px;">The following targets were found in your session. Connect to them before playing.</p>
+        <div id="connectionsList"></div>
+    </div>
+
+    <!-- Playback Controls -->
+    <div class="panel" id="playbackControls">
+        <h3>3. Transport</h3>
+        
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <span id="timeDisplay" style="font-family: monospace; font-size: 1.2em; color: var(--gold);">0.00s / 0.00s</span>
+            <span id="frameDisplay" style="color: var(--muted); font-size: 0.9em;">Frame: 0 / 0</span>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button id="btnPlay" style="flex: 2; background: var(--start-green); color: #000; font-size: 1.1em; padding: 12px;">▶ Play</button>
+            <button id="btnReset" style="flex: 1; background: #444; color: var(--cream);">⏮ Reset</button>
+        </div>
+    </div>
+
+    <script>
+        let sessionData = [];
+        let connections = {}; // Stores live WebSockets mapped to original recorded URLs
+        let totalDurationMs = 0;
+        
+        let isPlaying = false;
+        let playbackStartTime = 0;
+        let currentFrameIndex = 0;
+
+        // DOM Elements
+        const fileLoader = document.getElementById('jsonLoader');
+        const fileInfo = document.getElementById('fileInfo');
+        const connectionsPanel = document.getElementById('connectionsPanel');
+        const connectionsList = document.getElementById('connectionsList');
+        const playbackControls = document.getElementById('playbackControls');
+        const btnPlay = document.getElementById('btnPlay');
+        const btnReset = document.getElementById('btnReset');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const frameDisplay = document.getElementById('frameDisplay');
+        const progressBar = document.getElementById('progressBar');
+
+        // 1. Load & Parse JSON
+        fileLoader.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    sessionData = JSON.parse(event.target.result);
+                    
+                    // Sort by time just in case frames were recorded slightly out of order
+                    sessionData.sort((a, b) => a.time - b.time);
+                    totalDurationMs = sessionData[sessionData.length - 1].time;
+                    
+                    fileInfo.innerText = `Loaded ${sessionData.length} frames (${(totalDurationMs / 1000).toFixed(2)} seconds).`;
+                    fileInfo.style.color = "var(--muted)";
+                    
+                    buildConnectionsUI();
+                } catch (err) {
+                    fileInfo.innerText = "Error: Invalid JSON file.";
+                    fileInfo.style.color = "var(--stop-red)";
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // 2. Build Dynamic Connection UI
+        function buildConnectionsUI() {
+            connectionsList.innerHTML = ''; // Clear previous
+            
+            // Extract unique WebSocket addresses from the session file
+            const uniqueUrls = [...new Set(sessionData.map(d => d.ws))];
+            
+            uniqueUrls.forEach(url => {
+                const row = document.createElement('div');
+                row.className = 'conn-row';
+                
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = url; // Editable in case their local port changed since recording
+                
+                const btn = document.createElement('button');
+                btn.innerText = 'Connect';
+                btn.style.background = 'var(--purple)';
+                btn.style.color = '#000';
+                
+                const status = document.createElement('span');
+                status.innerText = 'Disconnected';
+                status.style.color = 'var(--stop-red)';
+                status.style.width = '100px';
+                status.style.textAlign = 'right';
+                status.style.fontSize = '0.9em';
+
+                btn.addEventListener('click', () => {
+                    if (connections[url]) connections[url].close();
+                    status.innerText = 'Connecting...';
+                    status.style.color = 'var(--gold)';
+                    
+                    const ws = new WebSocket(input.value);
+                    ws.onopen = () => { status.innerText = 'Connected'; status.style.color = 'var(--start-green)'; };
+                    ws.onclose = () => { status.innerText = 'Disconnected'; status.style.color = 'var(--stop-red)'; };
+                    
+                    // Map the active WebSocket to the *original* recorded URL key
+                    connections[url] = ws;
+                });
+
+                row.appendChild(input);
+                row.appendChild(btn);
+                row.appendChild(status);
+                connectionsList.appendChild(row);
+            });
+
+            connectionsPanel.style.display = 'block';
+            playbackControls.style.display = 'block';
+            updateDisplays(0);
+        }
+
+        // 3. Playback Engine
+        function playbackLoop() {
+            if (!isPlaying) return;
+            requestAnimationFrame(playbackLoop);
+
+            const elapsedMs = performance.now() - playbackStartTime;
+
+            // Fire all recorded frames that are due
+            while (currentFrameIndex < sessionData.length && sessionData[currentFrameIndex].time <= elapsedMs) {
+                const frame = sessionData[currentFrameIndex];
+                const ws = connections[frame.ws];
+                
+                // If we have an open connection mapped to this frame's URL, send it!
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(frame.cmd + '\n');
+                }
+                currentFrameIndex++;
+            }
+
+            updateDisplays(elapsedMs);
+
+            // Stop at end
+            if (currentFrameIndex >= sessionData.length) {
+                isPlaying = false;
+                btnPlay.innerText = '▶ Play';
+                btnPlay.style.background = 'var(--start-green)';
+                btnPlay.style.color = '#000';
+            }
+        }
+
+        function updateDisplays(elapsedMs) {
+            const clampedMs = Math.min(elapsedMs, totalDurationMs);
+            timeDisplay.innerText = `${(clampedMs / 1000).toFixed(2)}s / ${(totalDurationMs / 1000).toFixed(2)}s`;
+            frameDisplay.innerText = `Frame: ${currentFrameIndex} / ${sessionData.length}`;
+            progressBar.style.width = `${(clampedMs / totalDurationMs) * 100}%`;
+        }
+
+        btnPlay.addEventListener('click', () => {
+            if (currentFrameIndex >= sessionData.length) {
+                // If at the end, restart from beginning
+                currentFrameIndex = 0;
+            }
+
+            isPlaying = !isPlaying;
+            
+            if (isPlaying) {
+                // Calculate start time based on current frame's timestamp to support pausing/resuming
+                const currentOffsetMs = currentFrameIndex > 0 ? sessionData[currentFrameIndex - 1].time : 0;
+                playbackStartTime = performance.now() - currentOffsetMs;
+                
+                btnPlay.innerText = '⏸ Pause';
+                btnPlay.style.background = 'var(--stop-red)';
+                btnPlay.style.color = '#fff';
+                requestAnimationFrame(playbackLoop);
+            } else {
+                btnPlay.innerText = '▶ Play';
+                btnPlay.style.background = 'var(--start-green)';
+                btnPlay.style.color = '#000';
+            }
+        });
+
+        btnReset.addEventListener('click', () => {
+            isPlaying = false;
+            currentFrameIndex = 0;
+            btnPlay.innerText = '▶ Play';
+            btnPlay.style.background = 'var(--start-green)';
+            btnPlay.style.color = '#000';
+            updateDisplays(0);
+        });
+
+    </script>
+</body>
+</html>
