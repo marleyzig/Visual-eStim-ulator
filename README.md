@@ -1,7 +1,7 @@
 # Visual-eStim-ulator
 A web-based estim signal controller for use with the FOC-stim
 
-This is my attempt at creating a real-time, direct controller of the FOC-stim hardware (via Restim), in order to be able to explore electrode configurations and signals that best match those configurations.
+This is my attempt at creating a real-time, direct controller of the [FOC-stim](https://github.com/diglet48/FOC-Stim) hardware (via [Restim](https://github.com/diglet48/restim)), in order to be able to explore electrode configurations and signals that best match those configurations.
 
 This project was borne from a desire to have a more direct control over the creation of estim signals than what exists out there in the form of Funscripts. While the Funscript ecosystem is large, it seems from my experience that the software out there that converts Funscripts to the Tcode needed to input into Restim, can be really good or mediocre. This is not to belittle that realm, as I have had great success from those Funscript creators and appreciate all of the hard work the community has done so far.  But I wanted something different, where I could lock into a specific signal output/feeling for as long as I wanted, if I wanted, and didn't want to be at the guidance of someone else's pattern sequence. A lot of Funscripts were created with the creators specific electrodes, positions and bodies. Recently I hear several people getting FOC-stim boxes asking "what is the ideal electrode position for Funscript X", or "How do I work the conversion settings on the programs that translate a Funscript to Tcode data?".
 
